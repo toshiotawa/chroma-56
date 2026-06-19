@@ -51,7 +51,14 @@ FINAL_LEVELS.forEach((item, index) => DAYS.push({
 }));
 
 const TWO_NOTE_ACTIVE = [4, 5, 9, 10]; // E, F, A, Bb
+const TWO_NOTE_OOB_POOL = [3, 6, 8, 11]; // Eb, F#, Ab, B — just outside E/F/A/Bb
 const TWO_NOTE_PAIRS = [[4, 5], [4, 9], [4, 10], [5, 9], [5, 10], [9, 10]];
+const START_PLACEMENTS = [[4, 4], [3, 4], [4, 3]];
+const TWO_NOTE_TIMBRES = 5;
+const TWO_NOTE_OOB_RATES = {
+  memory: { targetTarget: 0.70, oneOob: 0.25, twoOob: 0.05 },
+  boundary: { targetTarget: 0.50, oneOob: 0.40, twoOob: 0.10 }
+};
 const SAME_OCTAVE = [[3, 3], [4, 4], [5, 5]];
 const ONE_MOVES = [[4, 4], [3, 4], [5, 4], [4, 3], [4, 5]];
 const ALL_PLACEMENTS = [3, 4, 5].flatMap((first) => [3, 4, 5].map((second) => [first, second]));
@@ -71,7 +78,7 @@ const doubleDay = (label, focus, pairs, placements, options = {}) => ({
 
 const DOUBLE_DAY_BLUEPRINTS = [
   // Week 1 — one pair at a time, always in the middle register.
-  ...TWO_NOTE_PAIRS.map((pair) => doubleDay(`${pairName(pair)} · はじめの輪郭`, `中央の${pairName(pair)}だけを反復し、2音を別々の名前として結びます。`, [pair], [[4, 4]])),
+  ...TWO_NOTE_PAIRS.map((pair) => doubleDay(`${pairName(pair)} · はじめの輪郭`, `中央の${pairName(pair)}だけを反復し、2音を別々の名前として結びます。`, [pair], START_PLACEMENTS)),
   doubleDay("中央6ペア · 初統合", "6種類を混ぜます。響きの名前ではなく、含まれる2音を選びます。", TWO_NOTE_PAIRS, [[4, 4]]),
 
   // Week 2 — contrast pairs sharing one pitch.
@@ -346,7 +353,7 @@ function activeNotesFor(day) {
 }
 
 function oobNotesFor(active) {
-  if (selectedMode === "double") return [];
+  if (selectedMode === "double") return TWO_NOTE_OOB_POOL;
   if (active.length === 12) return [];
   const raw = [Math.min(...active) - 2, Math.min(...active) - 1, Math.max(...active) + 1, Math.max(...active) + 2];
   return [...new Set(raw.map((note) => (note + 12) % 12))].filter((note) => !active.includes(note));
@@ -398,7 +405,7 @@ function openDay(dayNumber) {
   const sortedActive = sortChromaticallyFromC(active);
   const sortedOob = sortChromaticallyFromC(oob);
   $("#introOob").textContent = selectedMode === "double"
-    ? "回答：E・F・A・Bbから必ず2つ ／ 出題は2音のみ・単音とOTHERは混ぜません。"
+    ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")} ／ 未知音はOOBで答えます。`
     : oob.length
     ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
     : `選択肢：${sortedActive.map(displayNote).join("・")} ／ 全12音のためOOBはありません。`;
@@ -512,18 +519,84 @@ function orderSingleNoteTestTrials(deck, phases) {
   ];
 }
 
-function buildTwoNoteDeck(day) {
-  const total = day.counts.reduce((sum, count) => sum + count, 0);
+function twoNoteOobRatesFor(day) {
+  return day.day <= 14 ? TWO_NOTE_OOB_RATES.memory : TWO_NOTE_OOB_RATES.boundary;
+}
+
+function expectedForTwoNote(pitchClasses, active) {
+  return pitchClasses
+    .map((pitchClass) => (active.includes(pitchClass) ? displayNote(pitchClass) : "OOB"))
+    .sort();
+}
+
+function sortPitchClassesBassOrder(pitchClasses, octaves) {
+  const indexed = pitchClasses.map((pitchClass, index) => ({
+    pitchClass,
+    octave: octaves[index],
+    midi: (octaves[index] + 1) * 12 + pitchClass
+  }));
+  indexed.sort((first, second) => first.midi - second.midi);
+  return {
+    pitchClasses: indexed.map((entry) => entry.pitchClass),
+    octaves: indexed.map((entry) => entry.octave),
+    midis: indexed.map((entry) => entry.midi)
+  };
+}
+
+function makeTwoNoteTrial(pitchClasses, octaves, active) {
+  const sorted = sortPitchClassesBassOrder(pitchClasses, octaves);
+  return {
+    pitchClasses: sorted.pitchClasses,
+    octaves: sorted.octaves,
+    midis: sorted.midis,
+    expected: expectedForTwoNote(sorted.pitchClasses, active),
+    isOob: sorted.pitchClasses.some((pitchClass) => !active.includes(pitchClass))
+  };
+}
+
+function pickRandom(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function buildTargetTargetTrials(count, day, active) {
   const base = day.pairs.flatMap((pair) => day.placements.map((octaves) => ({ pair, octaves })));
   const deck = [];
-  while (deck.length < total) deck.push(...shuffle(base));
-  return deck.slice(0, total).map(({ pair, octaves }) => ({
-    pitchClasses: [...pair],
-    octaves: [...octaves],
-    midis: pair.map((pitchClass, index) => (octaves[index] + 1) * 12 + pitchClass),
-    expected: pair.map(displayNote).sort(),
-    isOob: false
-  }));
+  while (deck.length < count) deck.push(...shuffle(base));
+  return deck.slice(0, count).map(({ pair, octaves }) => makeTwoNoteTrial([...pair], [...octaves], active));
+}
+
+function buildOneOobTrials(count, day, active, oob) {
+  const dayActiveNotes = [...new Set(day.pairs.flat())];
+  return Array.from({ length: count }, () => {
+    const activeNote = pickRandom(dayActiveNotes);
+    const oobNote = pickRandom(oob);
+    const placement = pickRandom(day.placements);
+    return makeTwoNoteTrial([activeNote, oobNote], [...placement], active);
+  });
+}
+
+function buildTwoOobTrials(count, day, active, oob) {
+  return Array.from({ length: count }, () => {
+    const [oobNote1, oobNote2] = shuffle(oob).slice(0, 2);
+    const placement = pickRandom(day.placements);
+    return makeTwoNoteTrial([oobNote1, oobNote2], [...placement], active);
+  });
+}
+
+function buildTwoNoteDeck(day, active, oob) {
+  const total = day.counts.reduce((sum, count) => sum + count, 0);
+  if (!oob.length) return buildTargetTargetTrials(total, day, active);
+
+  const rates = twoNoteOobRatesFor(day);
+  const targetTargetCount = Math.round(total * rates.targetTarget);
+  const oneOobCount = Math.round(total * rates.oneOob);
+  const twoOobCount = total - targetTargetCount - oneOobCount;
+
+  return shuffle([
+    ...buildTargetTargetTrials(targetTargetCount, day, active),
+    ...buildOneOobTrials(oneOobCount, day, active, oob),
+    ...buildTwoOobTrials(twoOobCount, day, active, oob)
+  ]);
 }
 
 function researchLimit(noteCount) {
@@ -544,7 +617,7 @@ function createSession() {
   const oob = oobNotesFor(active);
   const phases = phasesFor(selectedDay);
   const trialDeck = selectedMode === "double"
-    ? buildTwoNoteDeck(selectedDay)
+    ? buildTwoNoteDeck(selectedDay, active, oob)
     : orderSingleNoteTestTrials(buildSingleNoteDeck(selectedDay, active, oob), phases);
   session = {
     mode: selectedMode,
@@ -585,7 +658,7 @@ function renderPhase() {
   $("#phaseKicker").textContent = phase.kicker;
   $("#phaseTitle").textContent = phase.title;
   $("#instructionText").textContent = selectedMode === "double"
-    ? (phase.feedback ? "聴こえた2音をE・F・A・Bbから選び、「回答する」を押してください。" : "2音を選んで回答してください。正解は最後まで表示されません。")
+    ? (phase.feedback ? "聴こえた2音をE・F・A・BbまたはOOBから選び、「回答する」を押してください。未知音はOOBを2回選べます。" : "2音を選んで回答してください。正解は最後まで表示されません。")
     : (phase.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
   renderAnswers();
   prepareTrial();
@@ -721,7 +794,7 @@ async function playTrial() {
   if (selectedMode === "double") {
     // The two-note curriculum specifies exact octave placements. Do not pull
     // wide intervals back toward the center: those placements are the lesson.
-    trial.timbre = Math.floor(Math.random() * 4);
+    trial.timbre = Math.floor(Math.random() * TWO_NOTE_TIMBRES);
   }
   session.current = trial;
   $("#playTrialButton").disabled = true;
@@ -933,7 +1006,7 @@ function selectMode(mode) {
     ? "E・F・A・Bbだけを使い、6ペア×3オクターブの54配置を一段ずつほどいて身につける56日間です。"
     : "成人の絶対音感学習研究をもとに、Fから全12音へ段階的に広げる8週間。";
   $("#trainingAbout").textContent = mode === "double"
-    ? "単音・OTHER・新しい音は混ぜません。中央の1ペアから始め、共通音、音域、片側移動、全54配置へ進みます。成績によるロックはなく、毎日その日の課題を進めるだけです。"
+    ? "中央の1ペアから始め、境界音（OOB）・音域差・共通音・全54配置へ進みます。未知音はOOBで答え、成績によるロックはありません。"
     : "各音を「記憶・境界・速度・定着」の4段階で学びます。OOBとShepard toneによる聴覚干渉を含みます。";
   renderWeekTabs();
   renderDays();
