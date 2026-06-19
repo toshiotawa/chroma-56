@@ -1,6 +1,8 @@
 "use strict";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const DUAL_NOTE_NAMES = { 1: "C#/Db", 3: "D#/Eb", 6: "F#/Gb", 8: "G#/Ab", 10: "A#/Bb" };
+const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
 const ADDITION_ORDER = [5, 4, 6, 3, 7, 2, 8, 1, 9, 0, 10, 11];
 const LEVEL_BLUEPRINTS = [
   { level: "記憶", focus: "新しい音の輪郭を、5つの音色で結びつける", counts: [80, 40, 40] },
@@ -311,9 +313,19 @@ let timerId = null;
 let countdownId = null;
 
 function displayNote(note) {
-  if (selectedMode === "double" && note === 3) return "Eb";
-  if (selectedMode === "double" && note === 10) return "Bb";
-  return NOTE_NAMES[note];
+  return DUAL_NOTE_NAMES[note] || NOTE_NAMES[note];
+}
+
+function sortChromaticallyFromC(notes) {
+  return [...notes].sort((first, second) => first - second);
+}
+
+function partitionByKeyColor(notes) {
+  const sorted = sortChromaticallyFromC(notes);
+  return {
+    black: sorted.filter((note) => BLACK_KEYS.has(note)),
+    white: sorted.filter((note) => !BLACK_KEYS.has(note))
+  };
 }
 
 function showScreen(id) {
@@ -369,12 +381,19 @@ function openDay(dayNumber) {
   $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`}`;
   $("#introTitle").textContent = selectedDay.label;
   $("#introFocus").textContent = selectedDay.focus;
-  $("#introNotes").innerHTML = active.map((note) => `<span class="pitch-chip">${displayNote(note)}</span>`).join("");
+  const { black, white } = partitionByKeyColor(active);
+  const introRows = [
+    black.length ? `<div class="pitch-row pitch-row-sharps">${black.map((note) => `<span class="pitch-chip">${displayNote(note)}</span>`).join("")}</div>` : "",
+    `<div class="pitch-row pitch-row-naturals">${white.map((note) => `<span class="pitch-chip">${displayNote(note)}</span>`).join("")}</div>`
+  ].join("");
+  $("#introNotes").innerHTML = introRows;
+  const sortedActive = sortChromaticallyFromC(active);
+  const sortedOob = sortChromaticallyFromC(oob);
   $("#introOob").textContent = selectedMode === "double"
     ? "回答：E・F・A・Bbから必ず2つ ／ 出題は2音のみ・単音とOTHERは混ぜません。"
     : oob.length
-    ? `選択肢：${active.map(displayNote).join("・")}・OOB ／ OOB候補：${oob.map(displayNote).join("・")}`
-    : `選択肢：${active.map(displayNote).join("・")} ／ 全12音のためOOBはありません。`;
+    ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
+    : `選択肢：${sortedActive.map(displayNote).join("・")} ／ 全12音のためOOBはありません。`;
   $("#learnProgram").textContent = `${selectedDay.counts[0]}問 · フィードバックあり`;
   $("#speedProgramLabel").textContent = selectedMode === "double" && !selectedDay.timeLimit ? "反復" : "速度";
   $("#speedProgram").textContent = selectedMode === "double" && !selectedDay.timeLimit
@@ -418,7 +437,7 @@ function balancedPitchDeck(pitchClass, count, isOob) {
       pitchClass,
       midi: (octave + 1) * 12 + pitchClass,
       timbre,
-      expected: isOob ? "OOB" : NOTE_NAMES[pitchClass],
+      expected: isOob ? "OOB" : displayNote(pitchClass),
       isOob
     }))
   );
@@ -564,11 +583,22 @@ function renderPhase() {
   prepareTrial();
 }
 
+function answerButtonMarkup(label) {
+  return `<button class="answer-button ${label === "OOB" ? "oob" : ""}" type="button" data-answer="${label}" disabled>${label}</button>`;
+}
+
 function renderAnswers() {
-  const labels = session.active.map(displayNote);
-  if (session.oob.length) labels.push("OOB");
-  $("#answerGrid").innerHTML = labels.map((label) => `<button class="answer-button ${label === "OOB" ? "oob" : ""}" type="button" data-answer="${label}" disabled>${label}</button>`).join("")
-    + (selectedMode === "double" ? '<button id="submitAnswerButton" class="answer-submit" type="button" disabled>回答する <span>0 / 2</span></button>' : "");
+  const { black, white } = partitionByKeyColor(session.active);
+  const whiteLabels = white.map(displayNote);
+  if (session.oob.length) whiteLabels.push("OOB");
+  const blackRow = black.length
+    ? `<div class="answer-row answer-row-sharps">${black.map(displayNote).map(answerButtonMarkup).join("")}</div>`
+    : "";
+  const whiteRow = `<div class="answer-row answer-row-naturals">${whiteLabels.map(answerButtonMarkup).join("")}</div>`;
+  const submit = selectedMode === "double"
+    ? '<button id="submitAnswerButton" class="answer-submit" type="button" disabled>回答する <span>0 / 2</span></button>'
+    : "";
+  $("#answerGrid").innerHTML = blackRow + whiteRow + submit;
   $$(".answer-button").forEach((button) => button.addEventListener("click", () => {
     if (selectedMode === "double") toggleAnswer(button.dataset.answer);
     else answerTrial(button.dataset.answer);
@@ -615,7 +645,10 @@ function prepareTrial() {
   session.current = null;
   session.selectedAnswers = [];
   setAnswersEnabled(false);
-  $$(".answer-button").forEach((button) => button.classList.remove("correct", "wrong"));
+  $$(".answer-button").forEach((button) => {
+    button.classList.remove("correct", "wrong", "selected");
+    button.textContent = button.dataset.answer;
+  });
   $("#feedback").textContent = "";
   $("#feedback").className = "feedback";
   $("#timerValue").textContent = "—";
@@ -706,7 +739,10 @@ function answerTrial(answer) {
   window.setTimeout(() => {
     session.current = null;
     if (session.trialIndex >= phase.count) finishPhase();
-    else prepareTrial();
+    else {
+      prepareTrial();
+      if (session.results.length >= 1) void playTrial();
+    }
   }, delay);
 }
 

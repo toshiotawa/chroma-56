@@ -92,7 +92,9 @@ h1 em { color: var(--coral); font-weight: 400; }
 .session-focus { max-width: 620px; color: var(--muted); line-height: 1.8; }
 .note-panel { margin: 48px 0 24px; padding: 26px; border: 1px solid var(--line); background: var(--white); }
 .panel-label { margin: 0 0 18px; font-size: .64rem; font-weight: 800; letter-spacing: .16em; }
-.pitch-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.pitch-list { display: flex; flex-direction: column; gap: 8px; }
+.pitch-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pitch-row-sharps { min-height: 50px; }
 .pitch-chip { display: grid; place-items: center; min-width: 50px; height: 50px; padding: 0 13px; background: var(--ink); color: var(--white); border-radius: 50%; font-family: Georgia, serif; font-size: 1.18rem; }
 .oob-copy { margin: 18px 0 0; color: var(--muted); font-size: .82rem; }
 .program-list { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-right: 0; }
@@ -122,7 +124,10 @@ h1 em { color: var(--coral); font-weight: 400; }
 .listen-button { display: inline-flex; align-items: center; gap: 14px; min-width: 170px; height: 58px; justify-content: center; border: 0; background: var(--acid); font-weight: 900; cursor: pointer; }
 .listen-button:disabled { opacity: .35; cursor: default; }
 .play-symbol { font-size: .8rem; }
-.answer-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; max-width: 780px; margin-top: 30px; }
+.answer-grid { display: flex; flex-direction: column; align-items: center; gap: 9px; max-width: 780px; margin-top: 30px; }
+.answer-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; width: 100%; }
+.answer-row-sharps { min-height: 52px; }
+.answer-button[data-answer*="/"] { min-width: 72px; font-size: .92rem; }
 .answer-button { min-width: 58px; height: 52px; padding: 0 18px; border: 1px solid var(--line); background: var(--white); font-family: Georgia, serif; font-size: 1.05rem; cursor: pointer; }
 .answer-button:hover:not(:disabled) { border-color: var(--ink); transform: translateY(-2px); }
 .answer-button:disabled { opacity: .42; cursor: default; }
@@ -195,6 +200,7 @@ h1 em { color: var(--coral); font-weight: 400; }
   .trial-stage { padding-top: 40px; }
   .answer-grid { gap: 7px; }
   .answer-button { min-width: 52px; height: 48px; padding: 0 14px; }
+  .answer-button[data-answer*="/"] { min-width: 64px; font-size: .82rem; }
   .result-actions { flex-direction: column; align-items: stretch; }
   .result-actions .primary-button, .result-actions .secondary-button { margin-top: 10px; }
 }
