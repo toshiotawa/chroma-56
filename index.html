@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f0e8">
+  <meta name="description" content="1音と2音から選べる、ブラウザ完結の絶対音感トレーニング">
+  <title>Chroma 56 — 絶対音感トレーニング</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="site-header">
+      <button id="homeButton" class="brand" type="button" aria-label="トップへ戻る">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <span>CHROMA <b>56</b></span>
+      </button>
+      <button id="soundButton" class="icon-button" type="button" aria-label="音量設定" title="音量設定">
+        <span aria-hidden="true">♪</span>
+      </button>
+    </header>
+
+    <section id="modeScreen" class="screen active" aria-labelledby="modeTitle">
+      <div class="hero">
+        <p class="eyebrow">CHOOSE YOUR TRAINING</p>
+        <h1 id="modeTitle">ひとつずつ聴くか、<br><em>ふたつを分けて聴くか。</em></h1>
+        <p class="hero-copy">単音のピッチクラス同定と、2音の中から構成音を抽出するトレーニング。まずバージョンを選んでください。</p>
+      </div>
+      <div class="mode-grid">
+        <button class="mode-card featured" type="button" data-mode="single">
+          <span class="day-number">01 · SINGLE NOTE</span><strong>1音バージョン</strong>
+          <small>Fから全12音へ。1音ずつ音の色を定着させる56日間。</small>
+        </button>
+        <button class="mode-card" type="button" data-mode="double">
+          <span class="day-number">02 · TWO NOTES</span><strong>2音バージョン</strong>
+          <small>E・F・A・Bbの54配置を、1ペアずつ細かくほどく56日間。</small>
+        </button>
+      </div>
+      <aside class="research-note">
+        <span class="note-number">01</span>
+        <div><h2>保存もロックもなし</h2><p>DB・通信・自動保存はありません。日付は成績でロックされず、好きな順で進められます。</p></div>
+      </aside>
+    </section>
+
+    <section id="homeScreen" class="screen" aria-labelledby="homeTitle">
+      <button class="back-link" type="button" data-action="modes">← バージョンを選び直す</button>
+      <div class="hero">
+        <p id="versionEyebrow" class="eyebrow"></p>
+        <h1 id="homeTitle">音の高さではなく、<br><em>音の色</em>を覚える。</h1>
+        <p id="versionCopy" class="hero-copy"></p>
+      </div>
+
+      <div id="weekTabs" class="week-tabs" role="tablist" aria-label="週を選択"></div>
+      <div id="dayGrid" class="day-grid" aria-live="polite"></div>
+
+      <aside class="research-note">
+        <span class="note-number">01</span>
+        <div>
+          <h2>このトレーニングについて</h2>
+          <p id="trainingAbout"></p>
+        </div>
+      </aside>
+    </section>
+
+    <section id="introScreen" class="screen" aria-labelledby="introTitle">
+      <button class="back-link" type="button" data-action="days">← 日付を選び直す</button>
+      <div class="session-heading">
+        <p id="introDay" class="eyebrow"></p>
+        <h1 id="introTitle"></h1>
+        <p id="introFocus" class="session-focus"></p>
+      </div>
+      <div class="note-panel">
+        <p class="panel-label">TODAY'S PITCHES</p>
+        <div id="introNotes" class="pitch-list"></div>
+        <p id="introOob" class="oob-copy"></p>
+      </div>
+      <div class="program-list" aria-label="本日のプログラム">
+        <div><b>01</b><span>学習</span><small id="learnProgram">60問 · フィードバックあり</small></div>
+        <div><b>02</b><span id="speedProgramLabel">速度</span><small id="speedProgram">40問 · 3秒以内</small></div>
+        <div><b>03</b><span>干渉</span><small>Shepard tone · 20秒</small></div>
+        <div><b>04</b><span>確認</span><small id="testProgram">60問 · フィードバックなし</small></div>
+      </div>
+      <button id="startSessionButton" class="primary-button" type="button">トレーニングを開始</button>
+      <p class="headphone-note">小さめの音量から始め、可能ならヘッドフォンを使用してください。</p>
+    </section>
+
+    <section id="trainingScreen" class="screen training-screen" aria-labelledby="phaseTitle">
+      <div class="training-topbar">
+        <button class="back-link" type="button" data-action="quit">× 終了</button>
+        <div class="progress-meta"><span id="progressText"></span><span id="phaseCounter"></span></div>
+      </div>
+      <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
+
+      <div class="trial-stage">
+        <p id="phaseKicker" class="eyebrow"></p>
+        <h1 id="phaseTitle"></h1>
+        <p id="instructionText" class="instruction"></p>
+        <div id="timerRing" class="timer-ring" aria-hidden="true">
+          <span id="timerValue">—</span>
+        </div>
+        <button id="playTrialButton" class="listen-button" type="button">
+          <span class="play-symbol" aria-hidden="true">▶</span>
+          <span>音を聴く</span>
+        </button>
+        <div id="answerGrid" class="answer-grid" aria-label="回答"></div>
+        <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="interferenceScreen" class="screen interference-screen" aria-labelledby="interferenceTitle">
+      <p class="eyebrow">AUDITORY INTERFERENCE</p>
+      <h1 id="interferenceTitle">音の記憶を、いったん流す。</h1>
+      <p>下降し続けるように聞こえるShepard toneを20秒再生します。終わると、正解を表示しない確認セクションに進みます。</p>
+      <div class="shepard-visual" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <strong id="interferenceCountdown" class="countdown">20</strong>
+      <span class="countdown-unit">SECONDS</span>
+    </section>
+
+    <section id="resultScreen" class="screen" aria-labelledby="resultTitle">
+      <p class="eyebrow">SESSION COMPLETE</p>
+      <h1 id="resultTitle">今日の耳は、ここまで。</h1>
+      <p id="resultSubtitle" class="session-focus"></p>
+      <div class="result-grid">
+        <div><span>正答率</span><strong id="accuracyResult">—</strong></div>
+        <div><span>平均反応</span><strong id="rtResult">—</strong></div>
+        <div><span>確認正答率</span><strong id="testResult">—</strong></div>
+      </div>
+      <div id="confusionResult" class="result-note"></div>
+      <div class="result-actions">
+        <button id="retryButton" class="primary-button" type="button">同じ日をもう一度</button>
+        <button id="saveJsonButton" class="secondary-button" type="button">結果をJSONで保存</button>
+        <button class="secondary-button" type="button" data-action="days">日付選択へ戻る</button>
+      </div>
+      <p class="headphone-note">必要な場合は、画面を閉じる前にJSONを保存してください。</p>
+    </section>
+  </main>
+
+  <dialog id="volumeDialog" class="volume-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="close" aria-label="閉じる">×</button>
+      <h2>音量</h2>
+      <p>耳を守るため、控えめな設定をおすすめします。</p>
+      <label for="volumeSlider">マスター音量 <output id="volumeOutput">35%</output></label>
+      <input id="volumeSlider" type="range" min="0" max="70" value="35" step="1">
+      <button class="secondary-button" value="close">閉じる</button>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
