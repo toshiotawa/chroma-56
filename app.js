@@ -447,6 +447,44 @@ function buildSingleNoteDeck(day, active, oob) {
   return shuffle([...targetDeck, ...oobDeck]);
 }
 
+function orderWithLargeJumps(deck) {
+  const remaining = [...deck];
+  const ordered = [];
+
+  while (remaining.length) {
+    const previous = ordered[ordered.length - 1];
+    let candidates = previous
+      ? remaining.filter((trial) => Math.abs(trial.midi - previous.midi) > 12)
+      : remaining;
+
+    if (!candidates.length && previous) {
+      candidates = remaining.filter((trial) => Math.abs(trial.midi - previous.midi) >= 12);
+    }
+    if (!candidates.length) candidates = remaining;
+
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    ordered.push(chosen);
+    remaining.splice(remaining.indexOf(chosen), 1);
+  }
+
+  return ordered;
+}
+
+function orderSingleNoteTestTrials(deck, phases) {
+  const testPhase = phases.find((phase) => phase.id === "test");
+  if (!testPhase) return deck;
+
+  const testStart = phases
+    .slice(0, phases.indexOf(testPhase))
+    .reduce((sum, phase) => sum + phase.count, 0);
+  const testEnd = testStart + testPhase.count;
+  return [
+    ...deck.slice(0, testStart),
+    ...orderWithLargeJumps(deck.slice(testStart, testEnd)),
+    ...deck.slice(testEnd)
+  ];
+}
+
 function buildTwoNoteDeck(day) {
   const total = day.counts.reduce((sum, count) => sum + count, 0);
   const base = day.pairs.flatMap((pair) => day.placements.map((octaves) => ({ pair, octaves })));
@@ -477,11 +515,15 @@ function phasesFor(day) {
 function createSession() {
   const active = activeNotesFor(selectedDay);
   const oob = oobNotesFor(active);
+  const phases = phasesFor(selectedDay);
+  const trialDeck = selectedMode === "double"
+    ? buildTwoNoteDeck(selectedDay)
+    : orderSingleNoteTestTrials(buildSingleNoteDeck(selectedDay, active, oob), phases);
   session = {
     mode: selectedMode,
     active,
     oob,
-    phases: phasesFor(selectedDay),
+    phases,
     phaseIndex: 0,
     trialIndex: 0,
     current: null,
@@ -490,9 +532,7 @@ function createSession() {
     accepting: false,
     startedAt: 0,
     selectedAnswers: [],
-    trialDeck: selectedMode === "double"
-      ? buildTwoNoteDeck(selectedDay)
-      : buildSingleNoteDeck(selectedDay, active, oob),
+    trialDeck,
     sessionStartedAt: new Date().toISOString()
   };
 }
