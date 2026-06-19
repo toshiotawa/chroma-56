@@ -98,10 +98,16 @@
         <div id="timerRing" class="timer-ring" aria-hidden="true">
           <span id="timerValue">—</span>
         </div>
-        <button id="playTrialButton" class="listen-button" type="button">
-          <span class="play-symbol" aria-hidden="true">▶</span>
-          <span>音を聴く</span>
-        </button>
+        <div class="playback-controls">
+          <button id="playTrialButton" class="listen-button" type="button">
+            <span class="play-symbol" aria-hidden="true">▶</span>
+            <span>音を聴く</span>
+          </button>
+          <button id="pauseTrialButton" class="pause-button" type="button" aria-label="一時停止" disabled>
+            <span class="pause-symbol" aria-hidden="true">⏸</span>
+            <span>一時停止</span>
+          </button>
+        </div>
         <div id="answerGrid" class="answer-grid" aria-label="回答"></div>
         <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
       </div>

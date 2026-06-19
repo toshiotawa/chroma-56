@@ -177,6 +177,14 @@ class AudioEngine {
     this.activeNodes.clear();
   }
 
+  async pause() {
+    if (this.ctx?.state === "running") await this.ctx.suspend();
+  }
+
+  async resume() {
+    if (this.ctx?.state === "suspended") await this.ctx.resume();
+  }
+
   track(node) {
     this.activeNodes.add(node);
     node.addEventListener("ended", () => this.activeNodes.delete(node), { once: true });
@@ -639,9 +647,55 @@ function updateProgress() {
   $("#progressBar").style.width = `${overall}%`;
 }
 
+function updatePlaybackControls() {
+  const pauseButton = $("#pauseTrialButton");
+  if (!pauseButton) return;
+  const canPause = Boolean(session?.accepting && !session.paused);
+  if (session?.paused) {
+    pauseButton.disabled = false;
+    pauseButton.innerHTML = '<span class="pause-symbol" aria-hidden="true">▶</span><span>再開</span>';
+    pauseButton.setAttribute("aria-label", "再開");
+  } else {
+    pauseButton.disabled = !canPause;
+    pauseButton.innerHTML = '<span class="pause-symbol" aria-hidden="true">⏸</span><span>一時停止</span>';
+    pauseButton.setAttribute("aria-label", "一時停止");
+  }
+}
+
+async function togglePause() {
+  if (!session) return;
+  if (session.paused) await resumeSession();
+  else await pauseSession();
+}
+
+async function pauseSession() {
+  if (!session?.accepting || session.paused) return;
+  clearInterval(timerId);
+  session.paused = true;
+  session.pauseStartedAt = performance.now();
+  setAnswersEnabled(false);
+  await audio.pause();
+  updatePlaybackControls();
+}
+
+async function resumeSession() {
+  if (!session?.paused) return;
+  session.startedAt += performance.now() - session.pauseStartedAt;
+  session.paused = false;
+  await audio.resume();
+  setAnswersEnabled(true);
+  const deadline = currentPhase().limit;
+  if (deadline) {
+    updateTimer(deadline);
+    timerId = setInterval(() => updateTimer(deadline), 50);
+  }
+  updatePlaybackControls();
+}
+
 function prepareTrial() {
   clearInterval(timerId);
   session.accepting = false;
+  session.paused = false;
   session.current = null;
   session.selectedAnswers = [];
   setAnswersEnabled(false);
@@ -655,6 +709,8 @@ function prepareTrial() {
   $("#timerRing").classList.remove("urgent");
   $("#playTrialButton").disabled = false;
   $("#playTrialButton").innerHTML = '<span class="play-symbol" aria-hidden="true">▶</span><span>音を聴く</span>';
+  void audio.resume();
+  updatePlaybackControls();
   updateProgress();
 }
 
@@ -682,10 +738,11 @@ async function playTrial() {
   } else {
     $("#timerValue").textContent = "∞";
   }
+  updatePlaybackControls();
 }
 
 function updateTimer(limit) {
-  if (!session?.accepting) return;
+  if (!session?.accepting || session.paused) return;
   const left = Math.max(0, limit - (performance.now() - session.startedAt));
   $("#timerValue").textContent = (left / 1000).toFixed(1);
   $("#timerRing").classList.toggle("urgent", left < 800);
@@ -693,11 +750,14 @@ function updateTimer(limit) {
 }
 
 function answerTrial(answer) {
-  if (!session?.accepting) return;
+  if (!session?.accepting || session.paused) return;
   const phase = currentPhase();
   session.accepting = false;
+  session.paused = false;
   clearInterval(timerId);
+  void audio.resume();
   setAnswersEnabled(false);
+  updatePlaybackControls();
   const rt = Math.round(performance.now() - session.startedAt);
   const normalizedAnswer = selectedMode === "double" && Array.isArray(answer) ? [...answer].sort() : answer;
   const correct = selectedMode === "double"
@@ -842,6 +902,7 @@ function quitSession() {
   clearInterval(timerId);
   clearInterval(countdownId);
   audio.stopAll();
+  void audio.resume();
   session = null;
   showScreen("homeScreen");
 }
@@ -857,6 +918,7 @@ function showDays() {
     clearInterval(timerId);
     clearInterval(countdownId);
     audio.stopAll();
+    void audio.resume();
     session = null;
   }
   showScreen("homeScreen");
@@ -885,6 +947,7 @@ $$('[data-action="quit"]').forEach((button) => button.addEventListener("click", 
 $("#homeButton").addEventListener("click", goHome);
 $("#startSessionButton").addEventListener("click", startSession);
 $("#playTrialButton").addEventListener("click", playTrial);
+$("#pauseTrialButton").addEventListener("click", () => { void togglePause(); });
 $("#retryButton").addEventListener("click", startSession);
 $("#saveJsonButton").addEventListener("click", saveJson);
 $("#soundButton").addEventListener("click", () => $("#volumeDialog").showModal());
