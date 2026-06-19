@@ -9,6 +9,10 @@ const LEVEL_BLUEPRINTS = [
   { level: "定着", focus: "フィードバックなしで90%を目指す", counts: [40, 40, 80] }
 ];
 
+const OOB_RATES = { "記憶": 0.25, "境界": 0.5, "速度": 0.3, "定着": 0.25 };
+const SINGLE_NOTE_OCTAVES = [4, 5, 6];
+const SINGLE_NOTE_TIMBRES = 5;
+
 const FINAL_LEVELS = [
   ["全音統合", "全12音のカテゴリーをひとつに統合する", [50, 40, 70]],
   ["音色汎化", "5つの音色が変わっても同じ音名を捉える", [50, 40, 70]],
@@ -380,12 +384,6 @@ function openDay(dayNumber) {
   showScreen("introScreen");
 }
 
-function weightedTrial(active, oob) {
-  const isOob = oob.length > 0 && Math.random() < 0.25;
-  const pool = isOob ? oob : active;
-  return { pitchClass: pool[Math.floor(Math.random() * pool.length)], expected: isOob ? "OOB" : null, isOob };
-}
-
 function shuffle(items) {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index -= 1) {
@@ -393,6 +391,60 @@ function shuffle(items) {
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;
+}
+
+function circularPitchDistance(first, second) {
+  const distance = Math.abs(first - second);
+  return Math.min(distance, 12 - distance);
+}
+
+function allocateByWeight(items, total, weightFor) {
+  if (!items.length || total <= 0) return [];
+  const weighted = items.map((item) => ({ item, weight: weightFor(item) }));
+  const weightTotal = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  const allocations = weighted.map((entry) => {
+    const exact = total * entry.weight / weightTotal;
+    return { ...entry, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+  let remaining = total - allocations.reduce((sum, entry) => sum + entry.count, 0);
+  allocations.sort((first, second) => second.remainder - first.remainder);
+  for (let index = 0; index < remaining; index += 1) allocations[index % allocations.length].count += 1;
+  return allocations;
+}
+
+function balancedPitchDeck(pitchClass, count, isOob) {
+  const cells = SINGLE_NOTE_OCTAVES.flatMap((octave) =>
+    Array.from({ length: SINGLE_NOTE_TIMBRES }, (_, timbre) => ({
+      pitchClass,
+      midi: (octave + 1) * 12 + pitchClass,
+      timbre,
+      expected: isOob ? "OOB" : NOTE_NAMES[pitchClass],
+      isOob
+    }))
+  );
+  const deck = [];
+  while (deck.length < count) deck.push(...shuffle(cells));
+  return deck.slice(0, count);
+}
+
+function buildSingleNoteDeck(day, active, oob) {
+  const total = day.counts.reduce((sum, count) => sum + count, 0);
+  const oobRate = oob.length ? (OOB_RATES[day.level] ?? 0.25) : 0;
+  const oobCount = Math.round(total * oobRate);
+  const targetCount = total - oobCount;
+
+  const targetAllocations = allocateByWeight(active, targetCount, () => 1);
+  const targetDeck = targetAllocations.flatMap(({ item, count }) => balancedPitchDeck(item, count, false));
+
+  // Immediate neighbors receive four times the weight of two-semitone
+  // neighbors. For F boundary day this produces F 50%, E/F# 20% each,
+  // and D#/G 5% each across the complete session.
+  const oobAllocations = allocateByWeight(oob, oobCount, (pitchClass) => {
+    const nearest = Math.min(...active.map((target) => circularPitchDistance(pitchClass, target)));
+    return nearest === 1 ? 4 : 1;
+  });
+  const oobDeck = oobAllocations.flatMap(({ item, count }) => balancedPitchDeck(item, count, true));
+  return shuffle([...targetDeck, ...oobDeck]);
 }
 
 function buildTwoNoteDeck(day) {
@@ -407,14 +459,6 @@ function buildTwoNoteDeck(day) {
     expected: pair.map(displayNote).sort(),
     isOob: false
   }));
-}
-
-function chooseMidi(pitchClass, previousMidi) {
-  const candidates = [];
-  for (let midi = 60; midi <= 95; midi += 1) if (midi % 12 === pitchClass) candidates.push(midi);
-  const distant = previousMidi == null ? candidates : candidates.filter((midi) => Math.abs(midi - previousMidi) > 12);
-  const pool = distant.length ? distant : candidates;
-  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function researchLimit(noteCount) {
@@ -432,21 +476,23 @@ function phasesFor(day) {
 
 function createSession() {
   const active = activeNotesFor(selectedDay);
+  const oob = oobNotesFor(active);
   session = {
     mode: selectedMode,
     active,
-    oob: oobNotesFor(active),
+    oob,
     phases: phasesFor(selectedDay),
     phaseIndex: 0,
     trialIndex: 0,
     current: null,
-    previousMidi: null,
     phaseResults: [],
     results: [],
     accepting: false,
     startedAt: 0,
     selectedAnswers: [],
-    trialDeck: selectedMode === "double" ? buildTwoNoteDeck(selectedDay) : null,
+    trialDeck: selectedMode === "double"
+      ? buildTwoNoteDeck(selectedDay)
+      : buildSingleNoteDeck(selectedDay, active, oob),
     sessionStartedAt: new Date().toISOString()
   };
 }
@@ -542,16 +588,12 @@ function prepareTrial() {
 async function playTrial() {
   if (!session || session.accepting || session.current) return;
   const phase = currentPhase();
-  const trial = selectedMode === "double" ? session.trialDeck[session.results.length] : weightedTrial(session.active, session.oob);
-  if (selectedMode === "single") {
-    trial.expected = trial.isOob ? "OOB" : NOTE_NAMES[trial.pitchClass];
-    trial.midi = chooseMidi(trial.pitchClass, session.previousMidi);
-  } else {
+  const trial = session.trialDeck[session.results.length];
+  if (selectedMode === "double") {
     // The two-note curriculum specifies exact octave placements. Do not pull
     // wide intervals back toward the center: those placements are the lesson.
+    trial.timbre = Math.floor(Math.random() * 4);
   }
-  trial.timbre = Math.floor(Math.random() * (selectedMode === "double" ? 4 : 5));
-  session.previousMidi = selectedMode === "double" ? trial.midis[0] : trial.midi;
   session.current = trial;
   $("#playTrialButton").disabled = true;
   $("#playTrialButton").innerHTML = '<span>再生中…</span>';
