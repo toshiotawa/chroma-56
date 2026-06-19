@@ -658,7 +658,7 @@ function renderPhase() {
   $("#phaseKicker").textContent = phase.kicker;
   $("#phaseTitle").textContent = phase.title;
   $("#instructionText").textContent = selectedMode === "double"
-    ? (phase.feedback ? "聴こえた2音をE・F・A・BbまたはOOBから選び、「回答する」を押してください。未知音はOOBを2回選べます。" : "2音を選んで回答してください。正解は最後まで表示されません。")
+    ? (phase.feedback ? "聴こえた2音を選んでください。2音とも対象外なら、OOBを2回押して「OOB ×2」にしてください。" : "2音を選んで回答してください。正解は最後まで表示されません。")
     : (phase.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
   renderAnswers();
   prepareTrial();
@@ -689,16 +689,40 @@ function renderAnswers() {
 
 function toggleAnswer(answer) {
   if (!session?.accepting) return;
-  const index = session.selectedAnswers.indexOf(answer);
-  if (answer !== "OOB" && index >= 0) session.selectedAnswers.splice(index, 1);
-  else if (session.selectedAnswers.length < 2) session.selectedAnswers.push(answer);
-  else return;
-  const counts = session.selectedAnswers.reduce((map, item) => ({ ...map, [item]: (map[item] || 0) + 1 }), {});
+
+  if (answer === "OOB") {
+    const oobCount = session.selectedAnswers.filter((item) => item === "OOB").length;
+    if (oobCount === 0 && session.selectedAnswers.length < 2) {
+      session.selectedAnswers.push("OOB");
+    } else if (oobCount === 1 && session.selectedAnswers.length < 2) {
+      session.selectedAnswers.push("OOB");
+    } else {
+      session.selectedAnswers = session.selectedAnswers.filter((item) => item !== "OOB");
+    }
+  } else {
+    const index = session.selectedAnswers.indexOf(answer);
+    if (index >= 0) {
+      session.selectedAnswers.splice(index, 1);
+    } else if (session.selectedAnswers.length < 2) {
+      session.selectedAnswers.push(answer);
+    }
+  }
+
+  const counts = session.selectedAnswers.reduce((map, item) => {
+    map[item] = (map[item] || 0) + 1;
+    return map;
+  }, {});
+
   $$(".answer-button").forEach((button) => {
     const count = counts[button.dataset.answer] || 0;
     button.classList.toggle("selected", count > 0);
-    button.textContent = button.dataset.answer === "OOB" && count > 1 ? "OOB ×2" : button.dataset.answer;
+    if (button.dataset.answer === "OOB" && count > 0) {
+      button.textContent = count > 1 ? "OOB ×2" : "OOB ×1";
+    } else {
+      button.textContent = button.dataset.answer;
+    }
   });
+
   const submit = $("#submitAnswerButton");
   submit.disabled = session.selectedAnswers.length !== 2;
   submit.querySelector("span").textContent = `${session.selectedAnswers.length} / 2`;
