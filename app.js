@@ -77,9 +77,9 @@ const doubleDay = (label, focus, pairs, placements, options = {}) => ({
 });
 
 const DOUBLE_DAY_BLUEPRINTS = [
-  // Week 1 — one pair at a time, always in the middle register.
+  // Week 1 — one pair at a time, with mild register contrast from day one.
   ...TWO_NOTE_PAIRS.map((pair) => doubleDay(`${pairName(pair)} · はじめの輪郭`, `中央の${pairName(pair)}だけを反復し、2音を別々の名前として結びます。`, [pair], START_PLACEMENTS)),
-  doubleDay("中央6ペア · 初統合", "6種類を混ぜます。響きの名前ではなく、含まれる2音を選びます。", TWO_NOTE_PAIRS, [[4, 4]]),
+  doubleDay("中央6ペア · 初統合", "6種類を混ぜます。響きの名前ではなく、含まれる2音を選びます。", TWO_NOTE_PAIRS, START_PLACEMENTS),
 
   // Week 2 — contrast pairs sharing one pitch.
   doubleDay("Eを固定 · 相方3音", "Eは必ず含まれます。F・A・Bbのどれが相方かを切り分けます。", pairSet(0, 1, 2), [[4, 4]]),
@@ -88,7 +88,7 @@ const DOUBLE_DAY_BLUEPRINTS = [
   doubleDay("Bbを固定 · 相方3音", "Bbをアンカーにし、E・F・Aの取り違えを減らします。", pairSet(2, 4, 5), [[4, 4]]),
   doubleDay("半音ペア · 片方を落とさない", "E+FとA+Bbを比較し、濁りを1個の塊として処理しない練習です。", pairSet(0, 5), [[4, 4]]),
   doubleDay("特徴的な響き · 音名へ戻す", "E+Bb、F+A、E+A、F+Bbを響きの型だけで答えず、構成音へ戻します。", pairSet(1, 2, 3, 4), [[4, 4]]),
-  doubleDay("中央6ペア · 再統合", "共通音ごとの聞き分けを、もう一度6ペア全体へ戻します。", TWO_NOTE_PAIRS, [[4, 4]]),
+  doubleDay("中央6ペア · 再統合", "共通音ごとの聞き分けを、もう一度6ペア全体へ戻します。", TWO_NOTE_PAIRS, START_PLACEMENTS),
 
   // Week 3 — keep both notes in the same octave before crossing registers.
   doubleDay("低音域 · Eを含む3ペア", "両方を第3オクターブへ下げ、Eの音色を低域でも保ちます。", pairSet(0, 1, 2), [[3, 3]]),
