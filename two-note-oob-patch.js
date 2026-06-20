@@ -4,8 +4,6 @@
 // semitone-parallel copies of the target pair.
 (() => {
   const normalizePitchClass = (pitchClass) => (pitchClass + 12) % 12;
-  const midiFor = (pitchClass, octave) => (octave + 1) * 12 + pitchClass;
-  const placementKey = (pair, octaves) => `${pair.join(":")}@${octaves.join(":")}`;
 
   function intervalClassOf(pair) {
     const directed = normalizePitchClass(pair[1] - pair[0]);
@@ -43,47 +41,6 @@
     ));
   }
 
-  function bassOrderedVariant(pair, bassIndex, preferredBassOctave) {
-    const bassPitch = pair[bassIndex];
-    const upperPitch = pair[1 - bassIndex];
-    let bassOctave = preferredBassOctave;
-    let upperOctave = preferredBassOctave;
-
-    while (midiFor(upperPitch, upperOctave) <= midiFor(bassPitch, bassOctave)) {
-      upperOctave += 1;
-    }
-
-    // Keep the generated inversion inside the 3-5 octave curriculum where possible.
-    while (upperOctave > 5 && bassOctave > 3) {
-      bassOctave -= 1;
-      upperOctave -= 1;
-    }
-
-    return {
-      pair: [bassPitch, upperPitch],
-      octaves: [bassOctave, upperOctave]
-    };
-  }
-
-  function pairPlacementVariants(pair, octaves) {
-    const variants = [];
-    const seen = new Set();
-    const add = (candidatePair, candidateOctaves) => {
-      const key = placementKey(candidatePair, candidateOctaves);
-      if (seen.has(key)) return;
-      seen.add(key);
-      variants.push({ pair: candidatePair, octaves: candidateOctaves });
-    };
-
-    // Keep the authored placement, then guarantee both bass orientations.
-    add([...pair], [...octaves]);
-    const firstAsBass = bassOrderedVariant(pair, 0, octaves[0]);
-    const secondAsBass = bassOrderedVariant(pair, 1, octaves[1]);
-    add(firstAsBass.pair, firstAsBass.octaves);
-    add(secondAsBass.pair, secondAsBass.octaves);
-    return variants;
-  }
-
   // Replace broad OOB enumeration with the deliberately confusing set only.
   oobPairsFor = function patchedOobPairsFor(day) {
     return confusingOobPairsForDay(day);
@@ -114,18 +71,6 @@
       trials.push(...buildOobPairTrials(oobCount, hardOobPairs, day, "sameIntervalHardOob"));
     }
     return shuffle(trials);
-  };
-
-  buildPairTrials = function patchedBuildPairTrials(count, pairs, placements, enabledPairs, trialType) {
-    if (!pairs.length || count <= 0) return [];
-    const base = pairs.flatMap((pair) => placements.flatMap((octaves) =>
-      pairPlacementVariants(pair, octaves)
-    ));
-    const deck = [];
-    while (deck.length < count) deck.push(...shuffle(base));
-    return deck.slice(0, count).map(({ pair, octaves }) =>
-      makeTwoNoteTrial([...pair], [...octaves], enabledPairs, trialType)
-    );
   };
 
   const originalBuildExportPayload = buildExportPayload;

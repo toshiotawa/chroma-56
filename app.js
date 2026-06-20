@@ -691,37 +691,52 @@ function makeTwoNoteTrial(pitchClasses, octaves, enabledPairs, trialType) {
   };
 }
 
-function buildPairTrials(count, pairs, placements, enabledPairs, trialType) {
-  if (!pairs.length || count <= 0) return [];
-  const base = pairs.flatMap((pair) => pairPlacementVariants(pair, placements)
-    .map((octaves) => ({ pair, octaves })));
-  const deck = [];
-  while (deck.length < count) deck.push(...shuffle(base));
-  return deck.slice(0, count).map(({ pair, octaves }) => makeTwoNoteTrial([...pair], [...octaves], enabledPairs, trialType));
+const PAIR_RANGE_PATTERNS = {
+  close: { extraOctaves: 0 },
+  octavePlus: { extraOctaves: 1 },
+  wide: { extraOctaves: 2 }
+};
+
+function rangePatternsForPlacements(placements) {
+  if (placements.length <= 1) return ["close"];
+  if (placements.length < ALL_PLACEMENTS.length) return ["close", "octavePlus"];
+  return Object.keys(PAIR_RANGE_PATTERNS);
 }
 
-function pairPlacementVariants(pair, placements) {
-  const variants = placements.flatMap((octaves) => {
-    // Add one canonical voicing for each possible bass note. Equal-octave
-    // placements otherwise always put the lower pitch class in the bass.
-    const bassOctave = Math.min(...octaves, 4);
-    const firstBass = [
-      bassOctave,
-      bassOctave + (pair[1] <= pair[0] ? 1 : 0)
-    ];
-    const secondBass = [
-      bassOctave + (pair[0] <= pair[1] ? 1 : 0),
-      bassOctave
-    ];
-    return [[...octaves], firstBass, secondBass];
+function orderedPairRangeVariants(pair, placements) {
+  const patterns = rangePatternsForPlacements(placements);
+  return [0, 1].flatMap((bassIndex) => patterns.map((rangePattern) => {
+    const bassPitch = pair[bassIndex];
+    const upperPitch = pair[1 - bassIndex];
+    const extraOctaves = PAIR_RANGE_PATTERNS[rangePattern].extraOctaves;
+    const bassOctave = 4 - extraOctaves;
+    let upperOctave = bassOctave;
+    while ((upperOctave + 1) * 12 + upperPitch <= (bassOctave + 1) * 12 + bassPitch) {
+      upperOctave += 1;
+    }
+    upperOctave += extraOctaves;
+    return {
+      pair: [bassPitch, upperPitch],
+      octaves: [bassOctave, upperOctave],
+      rangePattern
+    };
+  }));
+}
+
+function buildPairTrials(count, pairs, placements, enabledPairs, trialType) {
+  if (!pairs.length || count <= 0) return [];
+  const pairAllocations = allocateByWeight(pairs, count, () => 1);
+  const trials = pairAllocations.flatMap(({ item: pair, count: pairCount }) => {
+    const cells = orderedPairRangeVariants(pair, placements);
+    const deck = [];
+    while (deck.length < pairCount) deck.push(...shuffle(cells));
+    return deck.slice(0, pairCount).map(({ pair: orderedPair, octaves, rangePattern }) => ({
+      ...makeTwoNoteTrial([...orderedPair], [...octaves], enabledPairs, trialType),
+      orderedPair: orderedPair.map(displayNote),
+      rangePattern
+    }));
   });
-  const seen = new Set();
-  return variants.filter((octaves) => {
-    const key = octaves.join(":");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return shuffle(trials);
 }
 
 function transposePair(pair, semitones) {
@@ -1041,7 +1056,11 @@ function answerTrial(answer) {
       pitchClasses: selectedMode === "double" ? session.current.pitchClasses.map(displayNote) : [NOTE_NAMES[session.current.pitchClass]],
       midi: selectedMode === "double" ? session.current.midis : [session.current.midi],
       timbre: TIMBRE_NAMES[session.current.timbre],
-      ...(selectedMode === "double" ? { trialType: session.current.trialType } : {})
+      ...(selectedMode === "double" ? {
+        trialType: session.current.trialType,
+        orderedPair: session.current.orderedPair,
+        rangePattern: session.current.rangePattern
+      } : {})
     },
     answer: normalizedAnswer === null ? null : (Array.isArray(normalizedAnswer) ? normalizedAnswer : [normalizedAnswer]),
     expected: Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected],
