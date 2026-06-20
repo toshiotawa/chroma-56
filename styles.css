@@ -97,7 +97,7 @@ h1 em { color: var(--coral); font-weight: 400; }
 .pitch-row-sharps { min-height: 50px; }
 .pitch-chip { display: grid; place-items: center; min-width: 50px; height: 50px; padding: 0 13px; background: var(--ink); color: var(--white); border-radius: 50%; font-family: Georgia, serif; font-size: 1.18rem; }
 .oob-copy { margin: 18px 0 0; color: var(--muted); font-size: .82rem; }
-.program-list { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-right: 0; }
+.program-list { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-right: 0; }
 .program-list div { padding: 22px; border-right: 1px solid var(--line); }
 .program-list b, .program-list span, .program-list small { display: block; }
 .program-list b { color: var(--coral); font-family: Georgia, serif; font-size: 1.5rem; }
@@ -112,8 +112,12 @@ h1 em { color: var(--coral); font-weight: 400; }
 .headphone-note { color: var(--muted); font-size: .75rem; }
 
 .training-screen { padding-top: 30px; }
-.training-topbar { display: flex; align-items: center; justify-content: space-between; }
-.progress-meta { display: flex; gap: 18px; color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .08em; }
+.training-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.training-topbar .back-link { margin-right: auto; }
+.training-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.text-button { border: 1px solid var(--line); background: var(--white); padding: 6px 12px; color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; cursor: pointer; }
+.text-button:hover { color: var(--ink); border-color: var(--ink); }
+.progress-meta { display: flex; gap: 18px; color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .08em; margin-left: auto; }
 .progress-track { height: 3px; margin-top: 18px; background: var(--line); overflow: hidden; }
 .progress-track span { display: block; width: 0; height: 100%; background: var(--coral); transition: width .25s; }
 .trial-stage { min-height: 650px; display: flex; flex-direction: column; align-items: center; padding-top: 58px; text-align: center; }
@@ -190,6 +194,7 @@ h1 em { color: var(--coral); font-weight: 400; }
   .mode-card strong { margin-top: 45px; }
   .day-card:last-child { grid-column: 1 / -1; }
   .program-list { grid-template-columns: repeat(2, 1fr); }
+  .training-topbar .progress-meta { width: 100%; margin-left: 0; justify-content: flex-end; }
   .result-grid { grid-template-columns: 1fr; }
   .result-grid div { border-right: 0; border-bottom: 1px solid var(--line); }
   .result-grid div:last-child { border-bottom: 0; }

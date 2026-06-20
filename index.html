@@ -74,12 +74,7 @@
         <div id="introNotes" class="pitch-list"></div>
         <p id="introOob" class="oob-copy"></p>
       </div>
-      <div class="program-list" aria-label="本日のプログラム">
-        <div><b>01</b><span>学習</span><small id="learnProgram">60問 · フィードバックあり</small></div>
-        <div><b>02</b><span id="speedProgramLabel">速度</span><small id="speedProgram">40問 · 3秒以内</small></div>
-        <div><b>03</b><span>干渉</span><small>Shepard tone · 20秒</small></div>
-        <div><b>04</b><span>確認</span><small id="testProgram">60問 · フィードバックなし</small></div>
-      </div>
+      <div id="sectionProgram" class="program-list" aria-label="本日のセクション"></div>
       <button id="startSessionButton" class="primary-button" type="button">トレーニングを開始</button>
       <p class="headphone-note">小さめの音量から始め、可能ならヘッドフォンを使用してください。</p>
     </section>
@@ -87,6 +82,10 @@
     <section id="trainingScreen" class="screen training-screen" aria-labelledby="phaseTitle">
       <div class="training-topbar">
         <button class="back-link" type="button" data-action="quit">× 終了</button>
+        <div class="training-actions">
+          <button id="exportPartialButton" class="text-button" type="button">途中JSON</button>
+          <button id="skipSectionButton" class="text-button" type="button">セクションをスキップ</button>
+        </div>
         <div class="progress-meta"><span id="progressText"></span><span id="phaseCounter"></span></div>
       </div>
       <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
@@ -116,7 +115,7 @@
     <section id="interferenceScreen" class="screen interference-screen" aria-labelledby="interferenceTitle">
       <p class="eyebrow">AUDITORY INTERFERENCE</p>
       <h1 id="interferenceTitle">音の記憶を、いったん流す。</h1>
-      <p>下降し続けるように聞こえるShepard toneを20秒再生します。終わると、正解を表示しない確認セクションに進みます。</p>
+      <p>下降し続けるように聞こえるShepard toneを20秒再生します。終わると次のセクションに進みます。</p>
       <div class="shepard-visual" aria-hidden="true">
         <i></i><i></i><i></i><i></i><i></i><i></i>
       </div>

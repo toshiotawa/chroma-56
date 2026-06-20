@@ -5,40 +5,86 @@ const TWO_NOTE_NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A
 const DUAL_NOTE_NAMES = { 1: "C#/Db", 3: "D#/Eb", 6: "F#/Gb", 8: "G#/Ab", 10: "A#/Bb" };
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
 const ADDITION_ORDER = [5, 4, 6, 3, 7, 2, 8, 1, 9, 0, 10, 11];
-const LEVEL_BLUEPRINTS = [
-  { level: "記憶", focus: "新しい音の輪郭を、5つの音色で結びつける", counts: [80, 40, 40] },
-  { level: "境界", focus: "対象外音と隣接音の境界を聞き分ける", counts: [60, 50, 50] },
-  { level: "速度", focus: "考えて比較する前に音名を選ぶ", counts: [50, 60, 50] },
-  { level: "定着", focus: "フィードバックなしで90%を目指す", counts: [40, 40, 80] }
-];
+const SECTION_COUNT = 5;
+const QUESTIONS_PER_SECTION = 60;
+const DAILY_TOTAL = 300;
+const RECENT_PAIR_WINDOW = 6;
+const RECENT_NOTE_WINDOW = 3;
 
-const OOB_RATES = { "記憶": 0.25, "境界": 0.5, "速度": 0.3, "定着": 0.25 };
 const SINGLE_NOTE_OCTAVES = [4, 5, 6];
 const SINGLE_NOTE_TIMBRES = 5;
 
+const SINGLE_NOTE_DAY_PROFILES = [
+  {
+    level: "記憶",
+    focus: "新しい音の輪郭を、5つの音色で結びつける",
+    sectionMixes: [
+      { count: 60, newNote: 0.85, recentNotes: 0.00, oldNotes: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newNote: 0.80, recentNotes: 0.05, oldNotes: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newNote: 0.75, recentNotes: 0.05, oldNotes: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.70, recentNotes: 0.10, oldNotes: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.75, recentNotes: 0.10, oldNotes: 0.00, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    level: "境界",
+    focus: "対象外音と隣接音の境界を聞き分ける",
+    sectionMixes: [
+      { count: 60, newNote: 0.70, recentNotes: 0.20, oldNotes: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newNote: 0.65, recentNotes: 0.20, oldNotes: 0.00, oob: 0.15, feedback: true },
+      { count: 60, newNote: 0.60, recentNotes: 0.25, oldNotes: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.55, recentNotes: 0.25, oldNotes: 0.05, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.55, recentNotes: 0.25, oldNotes: 0.05, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    level: "速度",
+    focus: "考えて比較する前に音名を選ぶ",
+    sectionMixes: [
+      { count: 60, newNote: 0.55, recentNotes: 0.25, oldNotes: 0.05, oob: 0.15, feedback: true },
+      { count: 60, newNote: 0.50, recentNotes: 0.25, oldNotes: 0.10, oob: 0.15, feedback: true },
+      { count: 60, newNote: 0.45, recentNotes: 0.25, oldNotes: 0.15, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.40, recentNotes: 0.25, oldNotes: 0.20, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.40, recentNotes: 0.25, oldNotes: 0.20, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    level: "定着",
+    focus: "フィードバックなしで90%を目指す",
+    sectionMixes: [
+      { count: 60, newNote: 0.40, recentNotes: 0.25, oldNotes: 0.20, oob: 0.15, feedback: true },
+      { count: 60, newNote: 0.35, recentNotes: 0.25, oldNotes: 0.25, oob: 0.15, feedback: true },
+      { count: 60, newNote: 0.30, recentNotes: 0.25, oldNotes: 0.30, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.25, recentNotes: 0.25, oldNotes: 0.35, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newNote: 0.25, recentNotes: 0.25, oldNotes: 0.35, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  }
+];
+
 const FINAL_LEVELS = [
-  ["全音統合", "全12音のカテゴリーをひとつに統合する", [50, 40, 70]],
-  ["音色汎化", "5つの音色が変わっても同じ音名を捉える", [50, 40, 70]],
-  ["音域汎化", "3オクターブを越えてクロマを捉える", [40, 50, 70]],
-  ["近接音", "半音隣の取り違えを減らす", [50, 50, 60]],
-  ["高速判断", "全12音を2秒前後で判断する", [40, 60, 60]],
-  ["無参照", "正解音を手がかりにせず判断する", [30, 40, 90]],
-  ["最終リハーサル", "精度と速度を同時に整える", [30, 30, 100]],
-  ["FINAL CHECK", "全12音の最終確認", [20, 20, 120]]
+  ["全音統合", "全12音のカテゴリーをひとつに統合する"],
+  ["音色汎化", "5つの音色が変わっても同じ音名を捉える"],
+  ["音域汎化", "3オクターブを越えてクロマを捉える"],
+  ["近接音", "半音隣の取り違えを減らす"],
+  ["高速判断", "全12音を2秒前後で判断する"],
+  ["無参照", "正解音を手がかりにせず判断する"],
+  ["最終リハーサル", "精度と速度を同時に整える"],
+  ["FINAL CHECK", "全12音の最終確認"]
 ];
 
 const DAYS = [];
 ADDITION_ORDER.forEach((pitchClass, pitchIndex) => {
-  LEVEL_BLUEPRINTS.forEach((blueprint, levelIndex) => {
+  SINGLE_NOTE_DAY_PROFILES.forEach((profile, levelIndex) => {
     const day = pitchIndex * 4 + levelIndex + 1;
     const prefix = pitchIndex === 0 ? NOTE_NAMES[pitchClass] : `+ ${NOTE_NAMES[pitchClass]}`;
     DAYS.push({
       day,
       noteCount: pitchIndex + 1,
-      label: `${prefix} · ${blueprint.level}`,
-      focus: blueprint.focus,
-      counts: blueprint.counts,
-      level: blueprint.level
+      label: `${prefix} · ${profile.level}`,
+      focus: profile.focus,
+      sectionMixes: profile.sectionMixes,
+      level: profile.level,
+      dayInCycle: levelIndex + 1
     });
   });
 });
@@ -47,8 +93,9 @@ FINAL_LEVELS.forEach((item, index) => DAYS.push({
   noteCount: 12,
   label: item[0],
   focus: item[1],
-  counts: item[2],
-  level: item[0]
+  sectionMixes: SINGLE_NOTE_DAY_PROFILES[3].sectionMixes,
+  level: item[0],
+  dayInCycle: 4
 }));
 
 // Pair order from the 264-day curriculum: every new pitch is connected to
@@ -61,13 +108,56 @@ const TWO_NOTE_TIMBRES = 5;
 const ALL_PLACEMENTS = [3, 4, 5].flatMap((first) => [3, 4, 5].map((second) => [first, second]));
 const pairName = (pair) => pair.map((note) => TWO_NOTE_NOTE_NAMES[note]).join(" + ");
 const TWO_NOTE_DAY_PROFILES = [
-  { name: "固定", focus: "新しいペアを中央音域で固定し、隣接コピーとの境界を覚えます。", targetWeights: { newPair: 7, reviewPairs: 1 }, placements: [[4, 4]] },
-  { name: "比較", focus: "新しいペアを既習ペア・隣接コピーと聴き比べます。", targetWeights: { newPair: 5, reviewPairs: 3 }, placements: [[4, 4], [3, 4], [4, 3]] },
-  { name: "汎化", focus: "上下・音域・音色を変え、同じ音名セットとして認識します。", targetWeights: { newPair: 1, reviewPairs: 1 }, placements: ALL_PLACEMENTS },
-  { name: "確認", focus: "新規ペアと累積した既習ペア、隣接OOBを混ぜて定着を確認します。", targetWeights: { newPair: 3, reviewPairs: 5 }, placements: ALL_PLACEMENTS, isTestDay: true }
+  {
+    name: "固定",
+    focus: "新しいペアを中心に固定します。",
+    placements: [[4, 4]],
+    sectionMixes: [
+      { count: 60, newPair: 0.90, recentPairs: 0.00, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newPair: 0.85, recentPairs: 0.05, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newPair: 0.80, recentPairs: 0.05, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    name: "比較",
+    focus: "新しいペアと直近ペアを比較します。",
+    placements: [[4, 4], [3, 4], [4, 3]],
+    sectionMixes: [
+      { count: 60, newPair: 0.70, recentPairs: 0.20, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 60, newPair: 0.65, recentPairs: 0.20, oldPairs: 0.00, oob: 0.15, feedback: true },
+      { count: 60, newPair: 0.60, recentPairs: 0.25, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    name: "汎化",
+    focus: "音域・上下・音色を変えて汎化します。",
+    placements: ALL_PLACEMENTS,
+    sectionMixes: [
+      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true },
+      { count: 60, newPair: 0.50, recentPairs: 0.25, oldPairs: 0.10, oob: 0.15, feedback: true },
+      { count: 60, newPair: 0.45, recentPairs: 0.25, oldPairs: 0.15, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  },
+  {
+    name: "確認",
+    focus: "累積ペアの中で確認します。",
+    placements: ALL_PLACEMENTS,
+    isTestDay: true,
+    sectionMixes: [
+      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true },
+      { count: 60, newPair: 0.35, recentPairs: 0.25, oldPairs: 0.25, oob: 0.15, feedback: true },
+      { count: 60, newPair: 0.30, recentPairs: 0.25, oldPairs: 0.30, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 60, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: false, shepardBefore: true }
+    ]
+  }
 ];
-
-const TWO_NOTE_TRIAL_RATES = { target: 0.60, adjacentMatchedOob: 0.35, randomOob: 0.05 };
 
 const DOUBLE_DAYS = TWO_NOTE_PAIR_STAGES.flatMap((newPair, stageIndex) =>
   TWO_NOTE_DAY_PROFILES.map((profile, dayIndex) => {
@@ -83,8 +173,7 @@ const DOUBLE_DAYS = TWO_NOTE_PAIR_STAGES.flatMap((newPair, stageIndex) =>
       enabledPairs,
       pairs: enabledPairs,
       placements: profile.placements,
-      targetWeights: profile.targetWeights,
-      counts: [20, 20, 20],
+      sectionMixes: profile.sectionMixes,
       isTestDay: Boolean(profile.isTestDay),
       label: `${pairName(newPair)} · ${profile.name}`,
       focus: `ペア ${stageIndex + 1}/66。${profile.focus}`,
@@ -303,11 +392,83 @@ function activeNotesFor(day) {
   return selectedMode === "double" ? day.active : ADDITION_ORDER.slice(0, day.noteCount);
 }
 
-function oobNotesFor(active) {
+function oobNotesFor(active, newNote) {
   if (selectedMode === "double") return [];
-  if (active.length === 12) return [];
-  const raw = [Math.min(...active) - 2, Math.min(...active) - 1, Math.max(...active) + 1, Math.max(...active) + 2];
-  return [...new Set(raw.map((note) => (note + 12) % 12))].filter((note) => !active.includes(note));
+  if (active.length >= 12) return [];
+  const activeSet = new Set(active);
+  const targetNote = newNote ?? active[active.length - 1];
+  const candidates = [];
+  for (const offset of [-2, -1, 1, 2]) {
+    const note = (targetNote + offset + 12) % 12;
+    if (!activeSet.has(note)) candidates.push(note);
+  }
+  const activeInOrder = ADDITION_ORDER.filter((note) => activeSet.has(note));
+  if (activeInOrder.length) {
+    const boundaryNotes = [activeInOrder[0], activeInOrder[activeInOrder.length - 1]];
+    for (const boundary of boundaryNotes) {
+      for (const offset of [-2, -1, 1, 2]) {
+        const note = (boundary + offset + 12) % 12;
+        if (!activeSet.has(note) && !candidates.includes(note)) candidates.push(note);
+      }
+    }
+  }
+  return candidates;
+}
+
+function splitReviewPairs(enabledPairs, newPair) {
+  const review = enabledPairs.filter((pair) => normalizedPairKey(pair) !== normalizedPairKey(newPair));
+  return {
+    recentPairs: review.slice(-RECENT_PAIR_WINDOW),
+    oldPairs: review.slice(0, -RECENT_PAIR_WINDOW)
+  };
+}
+
+function splitActiveNotes(active) {
+  const newNote = active[active.length - 1];
+  const prior = active.slice(0, -1);
+  return {
+    newNote,
+    recentNotes: prior.slice(-RECENT_NOTE_WINDOW),
+    oldNotes: prior.slice(0, -RECENT_NOTE_WINDOW)
+  };
+}
+
+function mixRate(mix, key) {
+  if (key === "new") return mix.newPair ?? mix.newNote ?? 0;
+  if (key === "recent") return mix.recentPairs ?? mix.recentNotes ?? 0;
+  return mix.oldPairs ?? mix.oldNotes ?? 0;
+}
+
+function allocateSectionTargets(targetCount, mix, pools) {
+  const categories = [
+    { key: "new", items: pools.new, rate: mixRate(mix, "new") },
+    { key: "recent", items: pools.recent, rate: mixRate(mix, "recent") },
+    { key: "old", items: pools.old, rate: mixRate(mix, "old") }
+  ].filter((category) => category.items.length > 0);
+  if (!categories.length || targetCount <= 0) return [];
+  return allocateByWeight(categories, targetCount, (category) => category.rate || 1);
+}
+
+function formatPercent(value) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function sectionProgramSummary(mix) {
+  const parts = [
+    `新規${formatPercent(mixRate(mix, "new"))}`,
+    mixRate(mix, "recent") ? `直近${formatPercent(mixRate(mix, "recent"))}` : "",
+    mixRate(mix, "old") ? `累積${formatPercent(mixRate(mix, "old"))}` : "",
+    mix.oob ? `OOB ${formatPercent(mix.oob)}` : "",
+    mix.feedback === false ? "FBなし" : "FBあり",
+    mix.shepardBefore ? "Shepard前" : ""
+  ].filter(Boolean);
+  return `${mix.count}問 · ${parts.join(" · ")}`;
+}
+
+function renderSectionProgram(day) {
+  $("#sectionProgram").innerHTML = day.sectionMixes.map((mix, index) => `
+    <div><b>${String(index + 1).padStart(2, "0")}</b><span>セクション ${index + 1}</span><small>${sectionProgramSummary(mix)}</small></div>
+  `).join("");
 }
 
 function renderDays() {
@@ -344,8 +505,9 @@ function renderWeekTabs() {
 function openDay(dayNumber) {
   selectedDay = (selectedMode === "double" ? DOUBLE_DAYS : DAYS)[dayNumber - 1];
   const active = activeNotesFor(selectedDay);
-  const oob = oobNotesFor(active);
-  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`}`;
+  const { newNote } = splitActiveNotes(active);
+  const oob = oobNotesFor(active, newNote);
+  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`} · ${DAILY_TOTAL}問`;
   $("#introTitle").textContent = selectedDay.label;
   $("#introFocus").textContent = selectedDay.focus;
   const { black, white } = partitionByKeyColor(active);
@@ -356,19 +518,15 @@ function openDay(dayNumber) {
   $("#introNotes").innerHTML = introRows;
   const sortedActive = sortChromaticallyFromC(active);
   const sortedOob = sortChromaticallyFromC(oob);
+  const firstMix = selectedDay.sectionMixes[0];
   $("#introOob").textContent = selectedMode === "double"
     ? selectedDay.enabledPairs.length < 66
-      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 配分：解禁ペア60%・隣接同一IC OOB 35%・ランダムOOB 5%`
+      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 1セクション目：新規${formatPercent(mixRate(firstMix, "new"))}・OOB ${formatPercent(firstMix.oob)}`
       : `解禁済み：66/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 全ペア解禁済みのためOOBなし`
     : oob.length
     ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
     : `選択肢：${sortedActive.map(displayNote).join("・")} ／ 全12音のためOOBはありません。`;
-  $("#learnProgram").textContent = `${selectedDay.counts[0]}問 · フィードバックあり`;
-  $("#speedProgramLabel").textContent = selectedMode === "double" && !selectedDay.timeLimit ? "反復" : "速度";
-  $("#speedProgram").textContent = selectedMode === "double" && !selectedDay.timeLimit
-    ? `${selectedDay.counts[1]}問 · 制限なし`
-    : `${selectedDay.counts[1]}問 · ${((selectedDay.timeLimit || 3000) / 1000).toFixed(1)}秒以内`;
-  $("#testProgram").textContent = `${selectedDay.counts[2]}問 · フィードバックなし`;
+  renderSectionProgram(selectedDay);
   showScreen("introScreen");
 }
 
@@ -415,24 +573,71 @@ function balancedPitchDeck(pitchClass, count, isOob) {
   return deck.slice(0, count);
 }
 
-function buildSingleNoteDeck(day, active, oob) {
-  const total = day.counts.reduce((sum, count) => sum + count, 0);
-  const oobRate = oob.length ? (OOB_RATES[day.level] ?? 0.25) : 0;
-  const oobCount = Math.round(total * oobRate);
-  const targetCount = total - oobCount;
-
-  const targetAllocations = allocateByWeight(active, targetCount, () => 1);
-  const targetDeck = targetAllocations.flatMap(({ item, count }) => balancedPitchDeck(item, count, false));
-
-  // Immediate neighbors receive four times the weight of two-semitone
-  // neighbors. For F boundary day this produces F 50%, E/F# 20% each,
-  // and D#/G 5% each across the complete session.
+function buildSingleNoteSectionDeck(day, mix, active, oob) {
+  const count = mix.count;
+  const oobCount = oob.length ? Math.round(count * mix.oob) : 0;
+  const targetCount = count - oobCount;
+  const { newNote, recentNotes, oldNotes } = splitActiveNotes(active);
+  const allocations = allocateSectionTargets(targetCount, mix, {
+    new: [newNote],
+    recent: recentNotes,
+    old: oldNotes
+  });
+  const targetDeck = allocations.flatMap(({ item, count: allocationCount }) => {
+    if (item.key === "new") return balancedPitchDeck(newNote, allocationCount, false);
+    if (item.key === "recent") {
+      return allocateByWeight(item.items, allocationCount, () => 1)
+        .flatMap(({ item: note, count: noteCount }) => balancedPitchDeck(note, noteCount, false));
+    }
+    return allocateByWeight(item.items, allocationCount, () => 1)
+      .flatMap(({ item: note, count: noteCount }) => balancedPitchDeck(note, noteCount, false));
+  });
   const oobAllocations = allocateByWeight(oob, oobCount, (pitchClass) => {
     const nearest = Math.min(...active.map((target) => circularPitchDistance(pitchClass, target)));
     return nearest === 1 ? 4 : 1;
   });
-  const oobDeck = oobAllocations.flatMap(({ item, count }) => balancedPitchDeck(item, count, true));
+  const oobDeck = oobAllocations.flatMap(({ item, count: allocationCount }) => balancedPitchDeck(item, allocationCount, true));
   return shuffle([...targetDeck, ...oobDeck]);
+}
+
+function buildTwoNoteSectionDeck(day, mix) {
+  const count = mix.count;
+  const { recentPairs, oldPairs } = splitReviewPairs(day.enabledPairs, day.newPair);
+  const allOobPairs = oobPairsFor(day);
+  const oobCount = allOobPairs.length ? Math.round(count * mix.oob) : 0;
+  const targetCount = count - oobCount;
+  const allocations = allocateSectionTargets(targetCount, mix, {
+    new: [day.newPair],
+    recent: recentPairs,
+    old: oldPairs
+  });
+  const trials = allocations.flatMap(({ item, count: allocationCount }) => {
+    if (item.key === "new") return buildPairTrials(allocationCount, [day.newPair], day.placements, day.enabledPairs, "newPair");
+    if (item.key === "recent") return buildPairTrials(allocationCount, item.items, day.placements, day.enabledPairs, "recentPair");
+    return buildPairTrials(allocationCount, item.items, day.placements, day.enabledPairs, "oldPair");
+  });
+  if (oobCount > 0) {
+    const adjacentOobPairs = adjacentMatchedOobPairsFor(day);
+    const adjacentKeys = new Set(adjacentOobPairs.map(normalizedPairKey));
+    const randomOobPairs = allOobPairs.filter((pair) => !adjacentKeys.has(normalizedPairKey(pair)));
+    const adjacentOobCount = adjacentOobPairs.length ? Math.round(oobCount * 0.7) : 0;
+    const randomOobCount = oobCount - adjacentOobCount;
+    trials.push(
+      ...buildOobPairTrials(adjacentOobCount, adjacentOobPairs, day, "adjacentSameIntervalClassOob"),
+      ...buildOobPairTrials(randomOobCount, randomOobPairs.length ? randomOobPairs : allOobPairs, day, "randomOob")
+    );
+  }
+  return shuffle(trials);
+}
+
+function buildSessionDecks(day, active, oob) {
+  return day.sectionMixes.map((mix, index) => {
+    let deck = selectedMode === "double"
+      ? buildTwoNoteSectionDeck(day, mix)
+      : buildSingleNoteSectionDeck(day, mix, active, oob);
+    if (selectedMode === "single" && mix.feedback === false) deck = orderWithLargeJumps(deck);
+    return deck.map((trial) => ({ ...trial, sectionIndex: index }));
+  });
 }
 
 function orderWithLargeJumps(deck) {
@@ -456,21 +661,6 @@ function orderWithLargeJumps(deck) {
   }
 
   return ordered;
-}
-
-function orderSingleNoteTestTrials(deck, phases) {
-  const testPhase = phases.find((phase) => phase.id === "test");
-  if (!testPhase) return deck;
-
-  const testStart = phases
-    .slice(0, phases.indexOf(testPhase))
-    .reduce((sum, phase) => sum + phase.count, 0);
-  const testEnd = testStart + testPhase.count;
-  return [
-    ...deck.slice(0, testStart),
-    ...orderWithLargeJumps(deck.slice(testStart, testEnd)),
-    ...deck.slice(testEnd)
-  ];
 }
 
 function sortPitchClassesBassOrder(pitchClasses, octaves) {
@@ -565,72 +755,47 @@ function buildOobPairTrials(count, pairs, day, trialType) {
   return buildPairTrials(count, pairs, day.placements, day.enabledPairs, trialType);
 }
 
-function buildTwoNoteDeck(day) {
-  const total = day.counts.reduce((sum, count) => sum + count, 0);
-  const reviewPairs = day.enabledPairs.slice(0, -1);
-  const allOobPairs = oobPairsFor(day);
-  const adjacentOobPairs = adjacentMatchedOobPairsFor(day);
-  const adjacentKeys = new Set(adjacentOobPairs.map(normalizedPairKey));
-  const nonAdjacentOobPairs = allOobPairs.filter((pair) => !adjacentKeys.has(normalizedPairKey(pair)));
-  const randomOobPairs = nonAdjacentOobPairs.length ? nonAdjacentOobPairs : allOobPairs;
-
-  const adjacentOobCount = adjacentOobPairs.length
-    ? Math.round(total * TWO_NOTE_TRIAL_RATES.adjacentMatchedOob)
-    : 0;
-  const requestedRandomCount = allOobPairs.length
-    ? Math.round(total * TWO_NOTE_TRIAL_RATES.randomOob)
-    : 0;
-  const randomOobCount = randomOobPairs.length ? requestedRandomCount : 0;
-  const targetCount = total - adjacentOobCount - randomOobCount;
-  const reviewShare = reviewPairs.length
-    ? day.targetWeights.reviewPairs / (day.targetWeights.newPair + day.targetWeights.reviewPairs)
-    : 0;
-  const reviewCount = Math.round(targetCount * reviewShare);
-  const newPairCount = targetCount - reviewCount;
-
-  return shuffle([
-    ...buildPairTrials(newPairCount, [day.newPair], day.placements, day.enabledPairs, "newPair"),
-    ...buildPairTrials(reviewCount, reviewPairs, day.placements, day.enabledPairs, "reviewPair"),
-    ...buildOobPairTrials(adjacentOobCount, adjacentOobPairs, day, "adjacentSameIntervalClassOob"),
-    ...buildOobPairTrials(randomOobCount, randomOobPairs, day, "randomOob")
-  ]);
-}
-
 function researchLimit(noteCount) {
   return Math.round(1183 + ((noteCount - 1) * (2028 - 1183)) / 11);
 }
 
-function phasesFor(day) {
-  const doubleLimit = selectedMode === "double" ? day.timeLimit : null;
-  return [
-    { id: "learn", title: "今日の配置を聴き分ける", kicker: "01 · LISTEN", count: day.counts[0], limit: doubleLimit || (selectedMode === "single" ? 5000 : null), feedback: true },
-    { id: "speed", title: doubleLimit ? "時間内に2音を決める" : "同じ課題をもう一巡", kicker: "02 · REPEAT", count: day.counts[1], limit: doubleLimit || (selectedMode === "single" ? 3000 : null), feedback: true },
-    { id: "test", title: "表示なしで確かめる", kicker: "04 · CHECK", count: day.counts[2], limit: doubleLimit || (selectedMode === "single" ? researchLimit(day.noteCount) : null), feedback: false }
-  ];
+function sectionsFor(day) {
+  return day.sectionMixes.map((mix, index) => ({
+    id: `section-${index + 1}`,
+    index,
+    count: mix.count,
+    feedback: mix.feedback !== false,
+    shepardBefore: Boolean(mix.shepardBefore),
+    limit: selectedMode === "double"
+      ? null
+      : (index >= 4 ? researchLimit(day.noteCount) : index >= 2 ? 3000 : 5000),
+    mix
+  }));
 }
 
 function createSession() {
   const active = activeNotesFor(selectedDay);
-  const oob = oobNotesFor(active);
-  const phases = phasesFor(selectedDay);
-  const trialDeck = selectedMode === "double"
-    ? buildTwoNoteDeck(selectedDay)
-    : orderSingleNoteTestTrials(buildSingleNoteDeck(selectedDay, active, oob), phases);
+  const { newNote } = splitActiveNotes(active);
+  const oob = oobNotesFor(active, newNote);
+  const sections = sectionsFor(selectedDay);
+  const sectionDecks = buildSessionDecks(selectedDay, active, oob);
   session = {
     mode: selectedMode,
     active,
     oob,
     hasOob: selectedMode === "double" ? oobPairsFor(selectedDay).length > 0 : oob.length > 0,
-    phases,
-    phaseIndex: 0,
+    sections,
+    sectionIndex: 0,
+    pendingSectionIndex: null,
+    skippedSections: [],
     trialIndex: 0,
     current: null,
-    phaseResults: [],
+    sectionResults: [],
     results: [],
     accepting: false,
     startedAt: 0,
     selectedAnswers: [],
-    trialDeck,
+    sectionDecks,
     sessionStartedAt: new Date().toISOString()
   };
 }
@@ -644,20 +809,24 @@ async function startSession() {
   }
   createSession();
   showScreen("trainingScreen");
-  renderPhase();
+  renderSection();
 }
 
-function currentPhase() { return session.phases[session.phaseIndex]; }
+function currentSection() { return session.sections[session.sectionIndex]; }
 
-function renderPhase() {
-  const phase = currentPhase();
+function currentSectionDeck() { return session.sectionDecks[session.sectionIndex]; }
+
+function renderSection() {
+  const section = currentSection();
   session.trialIndex = 0;
-  session.phaseResults = [];
-  $("#phaseKicker").textContent = phase.kicker;
-  $("#phaseTitle").textContent = phase.title;
+  session.sectionResults = [];
+  $("#phaseKicker").textContent = `${String(section.index + 1).padStart(2, "0")} · SECTION`;
+  $("#phaseTitle").textContent = section.feedback
+    ? `セクション ${section.index + 1}：音を聴き分ける`
+    : `セクション ${section.index + 1}：表示なしで確かめる`;
   $("#instructionText").textContent = selectedMode === "double"
-    ? (phase.feedback ? "解禁済みペアなら音名を2つ、それ以外のペアならOOBを1回押してください。" : "音名を2つ、またはOOBを選んでください。正解は最後まで表示されません。")
-    : (phase.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
+    ? (section.feedback ? "解禁済みペアなら音名を2つ、それ以外のペアならOOBを1回押してください。" : "音名を2つ、またはOOBを選んでください。正解は最後まで表示されません。")
+    : (section.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
   renderAnswers();
   prepareTrial();
 }
@@ -729,12 +898,12 @@ function submitTwoNoteAnswerWithSpace(event) {
 }
 
 function updateProgress() {
-  const phase = currentPhase();
-  const total = session.phases.reduce((sum, item) => sum + item.count, 0);
-  const completedBefore = session.phases.slice(0, session.phaseIndex).reduce((sum, item) => sum + item.count, 0);
+  const section = currentSection();
+  const total = session.sections.reduce((sum, item) => sum + item.count, 0);
+  const completedBefore = session.sections.slice(0, session.sectionIndex).reduce((sum, item) => sum + item.count, 0);
   const overall = ((completedBefore + session.trialIndex) / total) * 100;
-  $("#progressText").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${phase.id.toUpperCase()}`;
-  $("#phaseCounter").textContent = `${Math.min(session.trialIndex + 1, phase.count)} / ${phase.count}`;
+  $("#progressText").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · SECTION ${section.index + 1}/${session.sections.length}`;
+  $("#phaseCounter").textContent = `${Math.min(session.trialIndex + 1, section.count)} / ${section.count}`;
   $("#progressBar").style.width = `${overall}%`;
 }
 
@@ -775,7 +944,7 @@ async function resumeSession() {
   session.paused = false;
   await audio.resume();
   setAnswersEnabled(true);
-  const deadline = currentPhase().limit;
+  const deadline = currentSection().limit;
   if (deadline) {
     updateTimer(deadline);
     timerId = setInterval(() => updateTimer(deadline), 50);
@@ -809,8 +978,9 @@ function prepareTrial() {
 
 async function playTrial() {
   if (!session || session.accepting || session.current) return;
-  const phase = currentPhase();
-  const trial = session.trialDeck[session.results.length];
+  const section = currentSection();
+  const trial = currentSectionDeck()[session.trialIndex];
+  if (!trial) return;
   if (selectedMode === "double") {
     // The two-note curriculum specifies exact octave placements. Do not pull
     // wide intervals back toward the center: those placements are the lesson.
@@ -824,7 +994,7 @@ async function playTrial() {
   session.startedAt = performance.now();
   session.accepting = true;
   setAnswersEnabled(true);
-  const deadline = phase.limit;
+  const deadline = section.limit;
   if (deadline) {
     updateTimer(deadline);
     timerId = setInterval(() => updateTimer(deadline), 50);
@@ -844,7 +1014,7 @@ function updateTimer(limit) {
 
 function answerTrial(answer) {
   if (!session?.accepting || session.paused) return;
-  const phase = currentPhase();
+  const section = currentSection();
   session.accepting = false;
   session.paused = false;
   clearInterval(timerId);
@@ -858,7 +1028,8 @@ function answerTrial(answer) {
     : answer === session.current.expected;
   const result = {
     trial: session.results.length + 1,
-    phase: phase.id,
+    section: section.id,
+    sectionIndex: section.index,
     question: {
       pitchClasses: selectedMode === "double" ? session.current.pitchClasses.map(displayNote) : [NOTE_NAMES[session.current.pitchClass]],
       midi: selectedMode === "double" ? session.current.midis : [session.current.midi],
@@ -871,10 +1042,10 @@ function answerTrial(answer) {
     outcome: correct ? "correct" : "incorrect",
     reactionTimeMs: rt
   };
-  session.phaseResults.push(result);
+  session.sectionResults.push(result);
   session.results.push(result);
 
-  if (phase.feedback) {
+  if (section.feedback) {
     const expectedText = Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
     const expectedAnswers = Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected];
     const chosenAnswers = answer === null ? [] : (Array.isArray(answer) ? answer : [answer]);
@@ -893,10 +1064,10 @@ function answerTrial(answer) {
   }
 
   session.trialIndex += 1;
-  const delay = phase.feedback ? 300 : 350;
+  const delay = section.feedback ? 300 : 350;
   window.setTimeout(() => {
     session.current = null;
-    if (session.trialIndex >= phase.count) finishPhase();
+    if (session.trialIndex >= section.count) finishSection();
     else {
       prepareTrial();
       if (session.results.length >= 1) void playTrial();
@@ -904,15 +1075,39 @@ function answerTrial(answer) {
   }, delay);
 }
 
-function finishPhase() {
-  if (session.phaseIndex === 0) {
-    session.phaseIndex = 1;
-    renderPhase();
-  } else if (session.phaseIndex === 1) {
-    startInterference();
-  } else {
+function advanceToNextSection() {
+  const nextIndex = session.sectionIndex + 1;
+  if (nextIndex >= session.sections.length) {
     finishSession();
+    return;
   }
+  const nextSection = session.sections[nextIndex];
+  if (nextSection.shepardBefore) {
+    session.pendingSectionIndex = nextIndex;
+    startInterference();
+    return;
+  }
+  session.sectionIndex = nextIndex;
+  renderSection();
+}
+
+function finishSection() {
+  advanceToNextSection();
+}
+
+function skipCurrentSection() {
+  if (!session) return;
+  if (!window.confirm(`セクション ${session.sectionIndex + 1} をスキップしますか？このセクションの問題は記録されません。`)) return;
+  clearInterval(timerId);
+  audio.stopAll();
+  session.accepting = false;
+  session.current = null;
+  session.skippedSections.push({
+    section: session.sectionIndex + 1,
+    skipped: true,
+    skippedAt: new Date().toISOString()
+  });
+  advanceToNextSection();
 }
 
 async function startInterference() {
@@ -926,45 +1121,38 @@ async function startInterference() {
     $("#interferenceCountdown").textContent = Math.max(0, remaining);
     if (remaining <= 0) {
       clearInterval(countdownId);
-      session.phaseIndex = 2;
+      session.sectionIndex = session.pendingSectionIndex;
+      session.pendingSectionIndex = null;
       showScreen("trainingScreen");
-      renderPhase();
+      renderSection();
     }
   }, 1000);
 }
 
-function finishSession() {
-  audio.stopAll();
+function buildExportPayload({ partial = false } = {}) {
   const answered = session.results.filter((result) => result.answer !== null);
   const correct = session.results.filter((result) => result.correct);
-  const test = session.results.filter((result) => result.phase === "test");
-  const testCorrect = test.filter((result) => result.correct);
+  const checkSections = session.sections.filter((section) => !section.feedback);
+  const checkResults = session.results.filter((result) => checkSections.some((section) => section.id === result.section));
+  const checkCorrect = checkResults.filter((result) => result.correct);
   const avgRt = correct.length ? Math.round(correct.reduce((sum, result) => sum + result.reactionTimeMs, 0) / correct.length) : 0;
-  const accuracy = Math.round((correct.length / session.results.length) * 100);
-  const testAccuracy = Math.round((testCorrect.length / test.length) * 100);
-  const misses = session.results.filter((result) => !result.correct);
-  const missedCounts = misses.reduce((map, result) => {
-    result.expected.filter((note) => note !== "OOB").forEach((note) => map.set(note, (map.get(note) || 0) + 1));
-    return map;
-  }, new Map());
-  const weakest = [...missedCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([note]) => note);
+  const accuracy = session.results.length ? Math.round((correct.length / session.results.length) * 100) : 0;
+  const checkAccuracy = checkResults.length ? Math.round((checkCorrect.length / checkResults.length) * 100) : 0;
 
-  $("#resultSubtitle").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${session.results.length}問を完了`;
-  $("#accuracyResult").textContent = `${accuracy}%`;
-  $("#rtResult").textContent = avgRt ? `${(avgRt / 1000).toFixed(2)}秒` : "—";
-  $("#testResult").textContent = `${testAccuracy}%`;
-  $("#confusionResult").textContent = weakest.length
-    ? `今日、輪郭が曖昧だった音：${weakest.join("・")}。次回は最初の試聴で、この音だけ少し丁寧に聴いてみてください。`
-    : answered.length ? "今日は特定の音に偏った間違いがありませんでした。" : "回答された問題がありませんでした。";
-  completedExport = {
-    schemaVersion: 1,
+  return {
+    schemaVersion: 2,
     app: "Chroma 56",
     exportedAt: new Date().toISOString(),
     session: {
       version: selectedMode === "double" ? "two-note" : "single-note",
       startedAt: session.sessionStartedAt,
-      completedAt: new Date().toISOString(),
-      day: selectedDay.day
+      completedAt: partial ? null : new Date().toISOString(),
+      partial,
+      day: selectedDay.day,
+      currentSection: session.sectionIndex + 1,
+      completedSections: partial
+        ? session.sectionIndex + (session.trialIndex >= currentSection().count ? 1 : 0)
+        : session.sections.length
     },
     task: {
       title: selectedDay.label,
@@ -977,36 +1165,81 @@ function finishSession() {
         ? [...new Set(oobPairsFor(selectedDay).flat())].map(displayNote)
         : session.oob.map(displayNote),
       tonesPerQuestion: selectedMode === "double" ? 2 : 1,
-      oobRule: selectedMode === "double" ? "解禁済みペア集合にない2音ペアはOOB。解禁ペアの±1半音平行移動（同一インターバルクラス）を優先" : "対象外音はOOBを選択",
+      oobRule: selectedMode === "double"
+        ? "解禁済みペア集合にない2音ペアはOOB。セクションごとのOOB率内で隣接同一IC 70%・ランダム 30%"
+        : "新規音の±1/±2未習音を優先し、不足時は既習集合の境界から補充",
       ...(selectedMode === "double" ? {
         pairStage: selectedDay.stage,
         dayInPairStage: selectedDay.dayInStage,
         newPair: selectedDay.newPair.map(displayNote),
         enabledPairs: selectedDay.enabledPairs.map((pair) => pair.map(displayNote)),
-        oobDistribution: {
-          enabledPairsPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.target * 100 : 100,
-          adjacentSameIntervalClassPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.adjacentMatchedOob * 100 : 0,
-          randomPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.randomOob * 100 : 0
-        },
         adjacentSameIntervalClassOobPairs: adjacentMatchedOobPairsFor(selectedDay)
           .map((pair) => pair.map(displayNote))
       } : {}),
-      phases: session.phases.map(({ id, count, limit, feedback }) => ({ id, count, responseLimitMs: limit, feedback }))
+      sections: session.sections.map(({ id, index, count, limit, feedback, shepardBefore, mix }) => ({
+        id,
+        index,
+        count,
+        responseLimitMs: limit,
+        feedback,
+        shepardBefore,
+        mix: {
+          new: mixRate(mix, "new"),
+          recent: mixRate(mix, "recent"),
+          old: mixRate(mix, "old"),
+          oob: mix.oob ?? 0
+        }
+      })),
+      skippedSections: [...session.skippedSections]
     },
-    summary: { total: session.results.length, accuracyPercent: accuracy, testAccuracyPercent: testAccuracy, meanCorrectReactionTimeMs: avgRt },
+    summary: {
+      total: session.results.length,
+      accuracyPercent: accuracy,
+      checkAccuracyPercent: checkAccuracy,
+      meanCorrectReactionTimeMs: avgRt
+    },
     trials: session.results
   };
+}
+
+function finishSession() {
+  audio.stopAll();
+  const answered = session.results.filter((result) => result.answer !== null);
+  const correct = session.results.filter((result) => result.correct);
+  const checkSections = session.sections.filter((section) => !section.feedback);
+  const checkResults = session.results.filter((result) => checkSections.some((section) => section.id === result.section));
+  const checkCorrect = checkResults.filter((result) => result.correct);
+  const avgRt = correct.length ? Math.round(correct.reduce((sum, result) => sum + result.reactionTimeMs, 0) / correct.length) : 0;
+  const accuracy = session.results.length ? Math.round((correct.length / session.results.length) * 100) : 0;
+  const checkAccuracy = checkResults.length ? Math.round((checkCorrect.length / checkResults.length) * 100) : 0;
+  const misses = session.results.filter((result) => !result.correct);
+  const missedCounts = misses.reduce((map, result) => {
+    result.expected.filter((note) => note !== "OOB").forEach((note) => map.set(note, (map.get(note) || 0) + 1));
+    return map;
+  }, new Map());
+  const weakest = [...missedCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([note]) => note);
+
+  $("#resultSubtitle").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${session.results.length}問を完了`;
+  $("#accuracyResult").textContent = `${accuracy}%`;
+  $("#rtResult").textContent = avgRt ? `${(avgRt / 1000).toFixed(2)}秒` : "—";
+  $("#testResult").textContent = checkResults.length ? `${checkAccuracy}%` : "—";
+  $("#confusionResult").textContent = weakest.length
+    ? `今日、輪郭が曖昧だった音：${weakest.join("・")}。次回は最初の試聴で、この音だけ少し丁寧に聴いてみてください。`
+    : answered.length ? "今日は特定の音に偏った間違いがありませんでした。" : "回答された問題がありませんでした。";
+  completedExport = buildExportPayload({ partial: false });
   showScreen("resultScreen");
 }
 
-function saveJson() {
-  if (!completedExport) return;
-  const blob = new Blob([JSON.stringify(completedExport, null, 2)], { type: "application/json" });
+function saveJson({ partial = false } = {}) {
+  const payload = partial && session ? buildExportPayload({ partial: true }) : completedExport;
+  if (!payload) return;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const version = completedExport.session.version;
+  const version = payload.session.version;
+  const suffix = partial ? "-partial" : "";
   link.href = url;
-  link.download = `chroma56-${version}-day-${String(selectedDay.day).padStart(2, "0")}-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `chroma56-${version}-day-${String(selectedDay.day).padStart(2, "0")}${suffix}-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1048,8 +1281,8 @@ function selectMode(mode) {
     ? "12音から作る66個の無順序ペアを、1ペア4日ずつ積み上げる264日間です。"
     : "成人の絶対音感学習研究をもとに、Fから全12音へ段階的に広げる8週間。";
   $("#trainingAbout").textContent = mode === "double"
-    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。解禁ペア60%、隣接した同一ICのOOB 35%、ランダムOOB 5%で学びます。"
-    : "各音を「記憶・境界・速度・定着」の4段階で学びます。OOBとShepard toneによる聴覚干渉を含みます。";
+    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。1日300問（60×5セクション）で、Dayごとに新規・直近・累積の配分が変わります。"
+    : "各音を「記憶・境界・速度・定着」の4段階で学びます。1日300問（60×5セクション）で、新規音を焼き付けてから累積復習へ進みます。";
   renderWeekTabs();
   renderDays();
   showScreen("homeScreen");
@@ -1064,7 +1297,9 @@ $("#startSessionButton").addEventListener("click", startSession);
 $("#playTrialButton").addEventListener("click", playTrial);
 $("#pauseTrialButton").addEventListener("click", () => { void togglePause(); });
 $("#retryButton").addEventListener("click", startSession);
-$("#saveJsonButton").addEventListener("click", saveJson);
+$("#saveJsonButton").addEventListener("click", () => saveJson());
+$("#exportPartialButton")?.addEventListener("click", () => saveJson({ partial: true }));
+$("#skipSectionButton")?.addEventListener("click", skipCurrentSection);
 $("#soundButton").addEventListener("click", () => $("#volumeDialog").showModal());
 $("#volumeSlider").addEventListener("input", (event) => {
   const percent = Number(event.target.value);
