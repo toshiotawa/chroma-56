@@ -1072,7 +1072,9 @@ function answerTrial(answer) {
   session.results.push(result);
 
   if (section.feedback) {
-    const expectedText = Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
+    const expectedText = selectedMode === "double" && session.current.isOob
+      ? `OOB（${session.current.pitchClasses.map(displayNote).join(" + ")}）`
+      : Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
     const expectedAnswers = Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected];
     const chosenAnswers = answer === null ? [] : (Array.isArray(answer) ? answer : [answer]);
     expectedAnswers.forEach((expected) => {
