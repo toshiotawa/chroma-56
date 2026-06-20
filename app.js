@@ -521,7 +521,7 @@ function openDay(dayNumber) {
   const firstMix = selectedDay.sectionMixes[0];
   $("#introOob").textContent = selectedMode === "double"
     ? selectedDay.enabledPairs.length < 66
-      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 1セクション目：新規${formatPercent(mixRate(firstMix, "new"))}・OOB ${formatPercent(firstMix.oob)}`
+      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 1セクション目：新規${formatPercent(mixRate(firstMix, "new"))}・OOB ${formatPercent(firstMix.oob)} ／ 今日のHard OOB：${sameIntervalHardOobPairsFor(selectedDay).map(pairName).join(" / ") || "なし"}`
       : `解禁済み：66/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 全ペア解禁済みのためOOBなし`
     : oob.length
     ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
@@ -603,8 +603,8 @@ function buildSingleNoteSectionDeck(day, mix, active, oob) {
 function buildTwoNoteSectionDeck(day, mix) {
   const count = mix.count;
   const { recentPairs, oldPairs } = splitReviewPairs(day.enabledPairs, day.newPair);
-  const allOobPairs = oobPairsFor(day);
-  const oobCount = allOobPairs.length ? Math.round(count * mix.oob) : 0;
+  const hardOobPairs = sameIntervalHardOobPairsFor(day);
+  const oobCount = hardOobPairs.length ? Math.round(count * mix.oob) : 0;
   const targetCount = count - oobCount;
   const allocations = allocateSectionTargets(targetCount, mix, {
     new: [day.newPair],
@@ -617,15 +617,7 @@ function buildTwoNoteSectionDeck(day, mix) {
     return buildPairTrials(allocationCount, item.items, day.placements, day.enabledPairs, "oldPair");
   });
   if (oobCount > 0) {
-    const adjacentOobPairs = adjacentMatchedOobPairsFor(day);
-    const adjacentKeys = new Set(adjacentOobPairs.map(normalizedPairKey));
-    const randomOobPairs = allOobPairs.filter((pair) => !adjacentKeys.has(normalizedPairKey(pair)));
-    const adjacentOobCount = adjacentOobPairs.length ? Math.round(oobCount * 0.7) : 0;
-    const randomOobCount = oobCount - adjacentOobCount;
-    trials.push(
-      ...buildOobPairTrials(adjacentOobCount, adjacentOobPairs, day, "adjacentSameIntervalClassOob"),
-      ...buildOobPairTrials(randomOobCount, randomOobPairs.length ? randomOobPairs : allOobPairs, day, "randomOob")
-    );
+    trials.push(...buildOobPairTrials(oobCount, hardOobPairs, day, "sameIntervalHardOob"));
   }
   return shuffle(trials);
 }
@@ -701,16 +693,35 @@ function makeTwoNoteTrial(pitchClasses, octaves, enabledPairs, trialType) {
 
 function buildPairTrials(count, pairs, placements, enabledPairs, trialType) {
   if (!pairs.length || count <= 0) return [];
-  const base = pairs.flatMap((pair) => placements.map((octaves) => ({ pair, octaves })));
+  const base = pairs.flatMap((pair) => pairPlacementVariants(pair, placements)
+    .map((octaves) => ({ pair, octaves })));
   const deck = [];
   while (deck.length < count) deck.push(...shuffle(base));
   return deck.slice(0, count).map(({ pair, octaves }) => makeTwoNoteTrial([...pair], [...octaves], enabledPairs, trialType));
 }
 
-function allDistinctPairs(notes) {
-  return notes.flatMap((first, firstIndex) =>
-    notes.slice(firstIndex + 1).map((second) => [first, second])
-  );
+function pairPlacementVariants(pair, placements) {
+  const variants = placements.flatMap((octaves) => {
+    // Add one canonical voicing for each possible bass note. Equal-octave
+    // placements otherwise always put the lower pitch class in the bass.
+    const bassOctave = Math.min(...octaves, 4);
+    const firstBass = [
+      bassOctave,
+      bassOctave + (pair[1] <= pair[0] ? 1 : 0)
+    ];
+    const secondBass = [
+      bassOctave + (pair[0] <= pair[1] ? 1 : 0),
+      bassOctave
+    ];
+    return [[...octaves], firstBass, secondBass];
+  });
+  const seen = new Set();
+  return variants.filter((octaves) => {
+    const key = octaves.join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function transposePair(pair, semitones) {
@@ -727,28 +738,24 @@ function uniquePairs(pairs) {
   });
 }
 
-function allTwoNotePairs() {
-  return allDistinctPairs(NOTE_NAMES.map((_, pitchClass) => pitchClass));
+function sameIntervalSharedNotePairs(pair) {
+  const distance = circularPitchDistance(pair[0], pair[1]);
+  if (distance === 6) return [];
+  return uniquePairs(pair.flatMap((fixedNote, fixedIndex) => {
+    const targetOther = pair[1 - fixedIndex];
+    return [-distance, distance]
+      .map((offset) => (fixedNote + offset + 12) % 12)
+      .filter((otherNote) => otherNote !== targetOther && otherNote !== fixedNote)
+      .map((otherNote) => [fixedNote, otherNote]);
+  }));
 }
 
-function oobPairsFor(day) {
-  return allTwoNotePairs().filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
-}
-
-function adjacentMatchedOobPairsFor(day) {
-  const currentPairNeighbors = uniquePairs([
+function sameIntervalHardOobPairsFor(day) {
+  return uniquePairs([
+    ...sameIntervalSharedNotePairs(day.newPair),
     transposePair(day.newPair, -1),
     transposePair(day.newPair, 1)
   ]).filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
-  if (currentPairNeighbors.length) return currentPairNeighbors;
-
-  // Very late in the curriculum, both copies of the new pair may already be
-  // unlocked. In that case retain the same exercise using a review pair.
-  return uniquePairs([...day.enabledPairs].reverse().flatMap((pair) => [
-    transposePair(pair, -1),
-    transposePair(pair, 1)
-  ]))
-    .filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
 }
 
 function buildOobPairTrials(count, pairs, day, trialType) {
@@ -783,7 +790,7 @@ function createSession() {
     mode: selectedMode,
     active,
     oob,
-    hasOob: selectedMode === "double" ? oobPairsFor(selectedDay).length > 0 : oob.length > 0,
+    hasOob: selectedMode === "double" ? sameIntervalHardOobPairsFor(selectedDay).length > 0 : oob.length > 0,
     sections,
     sectionIndex: 0,
     pendingSectionIndex: null,
@@ -1162,18 +1169,18 @@ function buildExportPayload({ partial = false } = {}) {
         ? [...session.active.map(displayNote), ...(session.hasOob ? ["OOB"] : [])]
         : [...session.active.map(displayNote), ...(session.oob.length ? ["OOB"] : [])],
       oobPitches: selectedMode === "double"
-        ? [...new Set(oobPairsFor(selectedDay).flat())].map(displayNote)
+        ? [...new Set(sameIntervalHardOobPairsFor(selectedDay).flat())].map(displayNote)
         : session.oob.map(displayNote),
       tonesPerQuestion: selectedMode === "double" ? 2 : 1,
       oobRule: selectedMode === "double"
-        ? "解禁済みペア集合にない2音ペアはOOB。セクションごとのOOB率内で隣接同一IC 70%・ランダム 30%"
+        ? "新規ペアと同じインターバルクラスの片音共有型、および新規ペアを半音上下へ平行移動したペアのみをHard OOBとして出題"
         : "新規音の±1/±2未習音を優先し、不足時は既習集合の境界から補充",
       ...(selectedMode === "double" ? {
         pairStage: selectedDay.stage,
         dayInPairStage: selectedDay.dayInStage,
         newPair: selectedDay.newPair.map(displayNote),
         enabledPairs: selectedDay.enabledPairs.map((pair) => pair.map(displayNote)),
-        adjacentSameIntervalClassOobPairs: adjacentMatchedOobPairsFor(selectedDay)
+        sameIntervalHardOobPairs: sameIntervalHardOobPairsFor(selectedDay)
           .map((pair) => pair.map(displayNote))
       } : {}),
       sections: session.sections.map(({ id, index, count, limit, feedback, shepardBefore, mix }) => ({
