@@ -444,9 +444,9 @@ function allocateSectionTargets(targetCount, mix, pools) {
     { key: "new", items: pools.new, rate: mixRate(mix, "new") },
     { key: "recent", items: pools.recent, rate: mixRate(mix, "recent") },
     { key: "old", items: pools.old, rate: mixRate(mix, "old") }
-  ].filter((category) => category.items.length > 0);
+  ].filter((category) => category.items.length > 0 && category.rate > 0);
   if (!categories.length || targetCount <= 0) return [];
-  return allocateByWeight(categories, targetCount, (category) => category.rate || 1);
+  return allocateByWeight(categories, targetCount, (category) => category.rate);
 }
 
 function formatPercent(value) {
