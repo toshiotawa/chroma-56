@@ -601,17 +601,17 @@ function answerButtonMarkup(label) {
 }
 
 function renderAnswers() {
-  const answerNotes = selectedMode === "double" ? NOTE_NAMES.map((_, note) => note) : session.active;
+  const answerNotes = session.active;
   const { black, white } = partitionByKeyColor(answerNotes);
   const whiteLabels = white.map(displayNote);
-  if (selectedMode === "double") whiteLabels.push("OBB");
+  if (selectedMode === "double" && session.oob.length) whiteLabels.push("OBB");
   else if (session.oob.length) whiteLabels.push("OOB");
   const blackRow = black.length
     ? `<div class="answer-row answer-row-sharps">${black.map(displayNote).map(answerButtonMarkup).join("")}</div>`
     : "";
   const whiteRow = `<div class="answer-row answer-row-naturals">${whiteLabels.map(answerButtonMarkup).join("")}</div>`;
   const submit = selectedMode === "double"
-    ? '<button id="submitAnswerButton" class="answer-submit" type="button" disabled>回答する <span>0 / 2</span></button>'
+    ? '<button id="submitAnswerButton" class="answer-submit" type="button" aria-keyshortcuts="Space" disabled>回答する <span>0 / 2</span><kbd>Space</kbd></button>'
     : "";
   $("#answerGrid").innerHTML = blackRow + whiteRow + submit;
   $$(".answer-button").forEach((button) => button.addEventListener("click", () => {
@@ -651,6 +651,15 @@ function setAnswersEnabled(enabled) {
   $$(".answer-button").forEach((button) => { button.disabled = !enabled; });
   const submit = $("#submitAnswerButton");
   if (submit) submit.disabled = !enabled || session.selectedAnswers.length !== 2;
+}
+
+function submitTwoNoteAnswerWithSpace(event) {
+  if (event.code !== "Space" || event.repeat || selectedMode !== "double") return;
+  if (event.target instanceof Element && event.target.closest("input, textarea, select, dialog")) return;
+  const submit = $("#submitAnswerButton");
+  if (!session?.accepting || session.paused || !submit || submit.disabled) return;
+  event.preventDefault();
+  submit.click();
 }
 
 function updateProgress() {
@@ -719,6 +728,8 @@ function prepareTrial() {
     button.classList.remove("correct", "wrong", "selected");
     button.textContent = button.dataset.answer;
   });
+  const submit = $("#submitAnswerButton");
+  if (submit) submit.querySelector("span").textContent = "0 / 2";
   $("#feedback").textContent = "";
   $("#feedback").className = "feedback";
   $("#timerValue").textContent = "—";
@@ -798,12 +809,14 @@ function answerTrial(answer) {
 
   if (phase.feedback) {
     const expectedText = Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
-    if (selectedMode === "single") {
-      const expectedButton = $(`.answer-button[data-answer="${session.current.expected}"]`);
-      const chosenButton = answer ? $(`.answer-button[data-answer="${answer}"]`) : null;
-      if (expectedButton) expectedButton.classList.add("correct");
-      if (!correct && chosenButton) chosenButton.classList.add("wrong");
-    }
+    const expectedAnswers = Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected];
+    const chosenAnswers = answer === null ? [] : (Array.isArray(answer) ? answer : [answer]);
+    expectedAnswers.forEach((expected) => {
+      $(`.answer-button[data-answer="${expected}"]`)?.classList.add("correct");
+    });
+    if (!correct) chosenAnswers
+      .filter((chosen) => !expectedAnswers.includes(chosen))
+      .forEach((chosen) => $(`.answer-button[data-answer="${chosen}"]`)?.classList.add("wrong"));
     $("#feedback").textContent = correct ? `正解 · ${rt} ms` : answer === null ? `時間切れ · 正解は ${expectedText}` : `正解は ${expectedText}`;
     $("#feedback").className = `feedback ${correct ? "good" : "bad"}`;
   } else {
@@ -888,7 +901,9 @@ function finishSession() {
       title: selectedDay.label,
       focus: selectedDay.focus,
       targetPitches: session.active.map(displayNote),
-      choices: selectedMode === "double" ? [...TWO_NOTE_NOTE_NAMES, "OBB"] : [...session.active.map(displayNote), ...(session.oob.length ? ["OOB"] : [])],
+      choices: selectedMode === "double"
+        ? [...session.active.map(displayNote), ...(session.oob.length ? ["OBB"] : [])]
+        : [...session.active.map(displayNote), ...(session.oob.length ? ["OOB"] : [])],
       oobPitches: session.oob.map(displayNote),
       tonesPerQuestion: selectedMode === "double" ? 2 : 1,
       oobRule: selectedMode === "double" ? "2音とも現在のターゲット音セット外ならOBBを1回選択。混合OBBは出題しない" : "対象外音はOOBを選択",
@@ -978,6 +993,7 @@ $("#volumeSlider").addEventListener("input", (event) => {
   $("#volumeOutput").textContent = `${percent}%`;
   audio.setVolume(percent / 100);
 });
+document.addEventListener("keydown", submitTwoNoteAnswerWithSpace);
 
 selectMode("single");
 showScreen("modeScreen");
