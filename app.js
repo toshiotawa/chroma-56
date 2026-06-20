@@ -61,11 +61,13 @@ const TWO_NOTE_TIMBRES = 5;
 const ALL_PLACEMENTS = [3, 4, 5].flatMap((first) => [3, 4, 5].map((second) => [first, second]));
 const pairName = (pair) => pair.map((note) => TWO_NOTE_NOTE_NAMES[note]).join(" + ");
 const TWO_NOTE_DAY_PROFILES = [
-  { name: "固定", focus: "新しいペアを中央音域で固定し、2つの音名として覚えます。", weights: { newPair: 0.70, reviewPairs: 0.10, oob: 0.20 }, matchedOobRate: 0, placements: [[4, 4]] },
-  { name: "比較", focus: "新しいペアを既習ペアと聴き比べ、構成音の違いを切り分けます。", weights: { newPair: 0.50, reviewPairs: 0.30, oob: 0.20 }, matchedOobRate: 0, placements: [[4, 4], [3, 4], [4, 3]] },
-  { name: "汎化", focus: "上下・音域・音色を変え、同じ音名セットとして認識します。", weights: { newPair: 0.40, reviewPairs: 0.40, oob: 0.20 }, matchedOobRate: 0.50, placements: ALL_PLACEMENTS },
-  { name: "確認", focus: "新規ペアと累積した既習ペアを混ぜ、定着を確認します。", weights: { newPair: 0.30, reviewPairs: 0.50, oob: 0.20 }, matchedOobRate: 0.65, placements: ALL_PLACEMENTS, isTestDay: true }
+  { name: "固定", focus: "新しいペアを中央音域で固定し、隣接コピーとの境界を覚えます。", targetWeights: { newPair: 7, reviewPairs: 1 }, placements: [[4, 4]] },
+  { name: "比較", focus: "新しいペアを既習ペア・隣接コピーと聴き比べます。", targetWeights: { newPair: 5, reviewPairs: 3 }, placements: [[4, 4], [3, 4], [4, 3]] },
+  { name: "汎化", focus: "上下・音域・音色を変え、同じ音名セットとして認識します。", targetWeights: { newPair: 1, reviewPairs: 1 }, placements: ALL_PLACEMENTS },
+  { name: "確認", focus: "新規ペアと累積した既習ペア、隣接OOBを混ぜて定着を確認します。", targetWeights: { newPair: 3, reviewPairs: 5 }, placements: ALL_PLACEMENTS, isTestDay: true }
 ];
+
+const TWO_NOTE_TRIAL_RATES = { target: 0.60, adjacentMatchedOob: 0.35, randomOob: 0.05 };
 
 const DOUBLE_DAYS = TWO_NOTE_PAIR_STAGES.flatMap((newPair, stageIndex) =>
   TWO_NOTE_DAY_PROFILES.map((profile, dayIndex) => {
@@ -81,8 +83,7 @@ const DOUBLE_DAYS = TWO_NOTE_PAIR_STAGES.flatMap((newPair, stageIndex) =>
       enabledPairs,
       pairs: enabledPairs,
       placements: profile.placements,
-      weights: profile.weights,
-      matchedOobRate: profile.matchedOobRate,
+      targetWeights: profile.targetWeights,
       counts: [20, 20, 20],
       isTestDay: Boolean(profile.isTestDay),
       label: `${pairName(newPair)} · ${profile.name}`,
@@ -303,7 +304,7 @@ function activeNotesFor(day) {
 }
 
 function oobNotesFor(active) {
-  if (selectedMode === "double") return NOTE_NAMES.map((_, note) => note).filter((note) => !active.includes(note));
+  if (selectedMode === "double") return [];
   if (active.length === 12) return [];
   const raw = [Math.min(...active) - 2, Math.min(...active) - 1, Math.max(...active) + 1, Math.max(...active) + 2];
   return [...new Set(raw.map((note) => (note + 12) % 12))].filter((note) => !active.includes(note));
@@ -356,7 +357,9 @@ function openDay(dayNumber) {
   const sortedActive = sortChromaticallyFromC(active);
   const sortedOob = sortChromaticallyFromC(oob);
   $("#introOob").textContent = selectedMode === "double"
-    ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ OOB：${sortedOob.length ? `${sortedOob.map(displayNote).join("・")}だけで作る2音` : "なし（全12音解禁済み）"}`
+    ? selectedDay.enabledPairs.length < 66
+      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 配分：解禁ペア60%・隣接同一IC OOB 35%・ランダムOOB 5%`
+      : `解禁済み：66/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 全ペア解禁済みのためOOBなし`
     : oob.length
     ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
     : `選択肢：${sortedActive.map(displayNote).join("・")} ／ 全12音のためOOBはありません。`;
@@ -484,31 +487,34 @@ function sortPitchClassesBassOrder(pitchClasses, octaves) {
   };
 }
 
-function makeTwoNoteTrial(pitchClasses, octaves, isOob = false) {
+function normalizedPairKey(pair) {
+  return [...pair].sort((first, second) => first - second).join(":");
+}
+
+function classifyTwoNotePair(pair, enabledPairs) {
+  const enabledPairKeys = new Set(enabledPairs.map(normalizedPairKey));
+  return enabledPairKeys.has(normalizedPairKey(pair)) ? "TARGET_PAIR" : "OOB";
+}
+
+function makeTwoNoteTrial(pitchClasses, octaves, enabledPairs, trialType) {
   const sorted = sortPitchClassesBassOrder(pitchClasses, octaves);
+  const isOob = classifyTwoNotePair(pitchClasses, enabledPairs) === "OOB";
   return {
     pitchClasses: sorted.pitchClasses,
     octaves: sorted.octaves,
     midis: sorted.midis,
     expected: isOob ? ["OOB"] : sorted.pitchClasses.map(displayNote).sort(),
-    isOob
+    isOob,
+    trialType
   };
 }
 
-function pickRandom(items) {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
-function buildPairTrials(count, pairs, placements) {
+function buildPairTrials(count, pairs, placements, enabledPairs, trialType) {
   if (!pairs.length || count <= 0) return [];
   const base = pairs.flatMap((pair) => placements.map((octaves) => ({ pair, octaves })));
   const deck = [];
   while (deck.length < count) deck.push(...shuffle(base));
-  return deck.slice(0, count).map(({ pair, octaves }) => makeTwoNoteTrial([...pair], [...octaves]));
-}
-
-function intervalClass(pair) {
-  return circularPitchDistance(pair[0], pair[1]);
+  return deck.slice(0, count).map(({ pair, octaves }) => makeTwoNoteTrial([...pair], [...octaves], enabledPairs, trialType));
 }
 
 function allDistinctPairs(notes) {
@@ -517,42 +523,76 @@ function allDistinctPairs(notes) {
   );
 }
 
-function makeOobTrial(pair, day) {
-  const placement = [...pickRandom(day.placements)];
-  if (pair[0] === pair[1] && placement[0] === placement[1]) {
-    placement[1] = placement[0] === 5 ? 4 : placement[0] + 1;
-  }
-  return makeTwoNoteTrial([...pair], placement, true);
+function transposePair(pair, semitones) {
+  return pair.map((pitchClass) => (pitchClass + semitones + 12) % 12);
 }
 
-function buildOobTrials(count, day, oob) {
-  const randomOobTrial = () => {
-    const shuffled = shuffle(oob);
-    const oobNote1 = shuffled[0];
-    const oobNote2 = shuffled[1] ?? shuffled[0];
-    return makeOobTrial([oobNote1, oobNote2], day);
-  };
-
-  const targetIntervalClasses = new Set(day.enabledPairs.map(intervalClass));
-  const matchedPairs = allDistinctPairs(oob).filter((pair) => targetIntervalClasses.has(intervalClass(pair)));
-  const matchedCount = matchedPairs.length ? Math.round(count * day.matchedOobRate) : 0;
-  return shuffle([
-    ...Array.from({ length: matchedCount }, () => makeOobTrial(pickRandom(matchedPairs), day)),
-    ...Array.from({ length: count - matchedCount }, randomOobTrial)
-  ]);
+function uniquePairs(pairs) {
+  const seen = new Set();
+  return pairs.filter((pair) => {
+    const key = normalizedPairKey(pair);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
-function buildTwoNoteDeck(day, active, oob) {
+function allTwoNotePairs() {
+  return allDistinctPairs(NOTE_NAMES.map((_, pitchClass) => pitchClass));
+}
+
+function oobPairsFor(day) {
+  return allTwoNotePairs().filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
+}
+
+function adjacentMatchedOobPairsFor(day) {
+  const currentPairNeighbors = uniquePairs([
+    transposePair(day.newPair, -1),
+    transposePair(day.newPair, 1)
+  ]).filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
+  if (currentPairNeighbors.length) return currentPairNeighbors;
+
+  // Very late in the curriculum, both copies of the new pair may already be
+  // unlocked. In that case retain the same exercise using a review pair.
+  return uniquePairs([...day.enabledPairs].reverse().flatMap((pair) => [
+    transposePair(pair, -1),
+    transposePair(pair, 1)
+  ]))
+    .filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
+}
+
+function buildOobPairTrials(count, pairs, day, trialType) {
+  return buildPairTrials(count, pairs, day.placements, day.enabledPairs, trialType);
+}
+
+function buildTwoNoteDeck(day) {
   const total = day.counts.reduce((sum, count) => sum + count, 0);
   const reviewPairs = day.enabledPairs.slice(0, -1);
-  const oobCount = oob.length ? Math.round(total * day.weights.oob) : 0;
-  const reviewCount = reviewPairs.length ? Math.round(total * day.weights.reviewPairs) : 0;
-  const newPairCount = total - oobCount - reviewCount;
+  const allOobPairs = oobPairsFor(day);
+  const adjacentOobPairs = adjacentMatchedOobPairsFor(day);
+  const adjacentKeys = new Set(adjacentOobPairs.map(normalizedPairKey));
+  const nonAdjacentOobPairs = allOobPairs.filter((pair) => !adjacentKeys.has(normalizedPairKey(pair)));
+  const randomOobPairs = nonAdjacentOobPairs.length ? nonAdjacentOobPairs : allOobPairs;
+
+  const adjacentOobCount = adjacentOobPairs.length
+    ? Math.round(total * TWO_NOTE_TRIAL_RATES.adjacentMatchedOob)
+    : 0;
+  const requestedRandomCount = allOobPairs.length
+    ? Math.round(total * TWO_NOTE_TRIAL_RATES.randomOob)
+    : 0;
+  const randomOobCount = randomOobPairs.length ? requestedRandomCount : 0;
+  const targetCount = total - adjacentOobCount - randomOobCount;
+  const reviewShare = reviewPairs.length
+    ? day.targetWeights.reviewPairs / (day.targetWeights.newPair + day.targetWeights.reviewPairs)
+    : 0;
+  const reviewCount = Math.round(targetCount * reviewShare);
+  const newPairCount = targetCount - reviewCount;
 
   return shuffle([
-    ...buildPairTrials(newPairCount, [day.newPair], day.placements),
-    ...buildPairTrials(reviewCount, reviewPairs, day.placements),
-    ...buildOobTrials(oobCount, day, oob)
+    ...buildPairTrials(newPairCount, [day.newPair], day.placements, day.enabledPairs, "newPair"),
+    ...buildPairTrials(reviewCount, reviewPairs, day.placements, day.enabledPairs, "reviewPair"),
+    ...buildOobPairTrials(adjacentOobCount, adjacentOobPairs, day, "adjacentSameIntervalClassOob"),
+    ...buildOobPairTrials(randomOobCount, randomOobPairs, day, "randomOob")
   ]);
 }
 
@@ -574,12 +614,13 @@ function createSession() {
   const oob = oobNotesFor(active);
   const phases = phasesFor(selectedDay);
   const trialDeck = selectedMode === "double"
-    ? buildTwoNoteDeck(selectedDay, active, oob)
+    ? buildTwoNoteDeck(selectedDay)
     : orderSingleNoteTestTrials(buildSingleNoteDeck(selectedDay, active, oob), phases);
   session = {
     mode: selectedMode,
     active,
     oob,
+    hasOob: selectedMode === "double" ? oobPairsFor(selectedDay).length > 0 : oob.length > 0,
     phases,
     phaseIndex: 0,
     trialIndex: 0,
@@ -615,7 +656,7 @@ function renderPhase() {
   $("#phaseKicker").textContent = phase.kicker;
   $("#phaseTitle").textContent = phase.title;
   $("#instructionText").textContent = selectedMode === "double"
-    ? (phase.feedback ? "解禁ペアなら音名を2つ、2音とも対象外ならOOBを1回押してください。" : "音名を2つ、またはOOBを選んでください。正解は最後まで表示されません。")
+    ? (phase.feedback ? "解禁済みペアなら音名を2つ、それ以外のペアならOOBを1回押してください。" : "音名を2つ、またはOOBを選んでください。正解は最後まで表示されません。")
     : (phase.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
   renderAnswers();
   prepareTrial();
@@ -629,7 +670,7 @@ function renderAnswers() {
   const answerNotes = session.active;
   const { black, white } = partitionByKeyColor(answerNotes);
   const whiteLabels = white.map(displayNote);
-  if (selectedMode === "double" && session.oob.length) whiteLabels.push("OOB");
+  if (selectedMode === "double" && session.hasOob) whiteLabels.push("OOB");
   else if (session.oob.length) whiteLabels.push("OOB");
   const blackRow = black.length
     ? `<div class="answer-row answer-row-sharps">${black.map(displayNote).map(answerButtonMarkup).join("")}</div>`
@@ -821,7 +862,8 @@ function answerTrial(answer) {
     question: {
       pitchClasses: selectedMode === "double" ? session.current.pitchClasses.map(displayNote) : [NOTE_NAMES[session.current.pitchClass]],
       midi: selectedMode === "double" ? session.current.midis : [session.current.midi],
-      timbre: TIMBRE_NAMES[session.current.timbre]
+      timbre: TIMBRE_NAMES[session.current.timbre],
+      ...(selectedMode === "double" ? { trialType: session.current.trialType } : {})
     },
     answer: normalizedAnswer === null ? null : (Array.isArray(normalizedAnswer) ? normalizedAnswer : [normalizedAnswer]),
     expected: Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected],
@@ -929,16 +971,25 @@ function finishSession() {
       focus: selectedDay.focus,
       targetPitches: session.active.map(displayNote),
       choices: selectedMode === "double"
-        ? [...session.active.map(displayNote), ...(session.oob.length ? ["OOB"] : [])]
+        ? [...session.active.map(displayNote), ...(session.hasOob ? ["OOB"] : [])]
         : [...session.active.map(displayNote), ...(session.oob.length ? ["OOB"] : [])],
-      oobPitches: session.oob.map(displayNote),
+      oobPitches: selectedMode === "double"
+        ? [...new Set(oobPairsFor(selectedDay).flat())].map(displayNote)
+        : session.oob.map(displayNote),
       tonesPerQuestion: selectedMode === "double" ? 2 : 1,
-      oobRule: selectedMode === "double" ? "2音とも現在のターゲット音セット外ならOOBを1回選択。混合OOBは出題しない" : "対象外音はOOBを選択",
+      oobRule: selectedMode === "double" ? "解禁済みペア集合にない2音ペアはOOB。解禁ペアの±1半音平行移動（同一インターバルクラス）を優先" : "対象外音はOOBを選択",
       ...(selectedMode === "double" ? {
         pairStage: selectedDay.stage,
         dayInPairStage: selectedDay.dayInStage,
         newPair: selectedDay.newPair.map(displayNote),
-        enabledPairs: selectedDay.enabledPairs.map((pair) => pair.map(displayNote))
+        enabledPairs: selectedDay.enabledPairs.map((pair) => pair.map(displayNote)),
+        oobDistribution: {
+          enabledPairsPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.target * 100 : 100,
+          adjacentSameIntervalClassPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.adjacentMatchedOob * 100 : 0,
+          randomPercent: session.hasOob ? TWO_NOTE_TRIAL_RATES.randomOob * 100 : 0
+        },
+        adjacentSameIntervalClassOobPairs: adjacentMatchedOobPairsFor(selectedDay)
+          .map((pair) => pair.map(displayNote))
       } : {}),
       phases: session.phases.map(({ id, count, limit, feedback }) => ({ id, count, responseLimitMs: limit, feedback }))
     },
@@ -997,7 +1048,7 @@ function selectMode(mode) {
     ? "12音から作る66個の無順序ペアを、1ペア4日ずつ積み上げる264日間です。"
     : "成人の絶対音感学習研究をもとに、Fから全12音へ段階的に広げる8週間。";
   $("#trainingAbout").textContent = mode === "double"
-    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。新規・既習・純粋OOBを混ぜ、未解禁ペアとOOB＋単音は出題しません。"
+    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。解禁ペア60%、隣接した同一ICのOOB 35%、ランダムOOB 5%で学びます。"
     : "各音を「記憶・境界・速度・定着」の4段階で学びます。OOBとShepard toneによる聴覚干渉を含みます。";
   renderWeekTabs();
   renderDays();
