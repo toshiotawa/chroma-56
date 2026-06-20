@@ -5,9 +5,8 @@ const TWO_NOTE_NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A
 const DUAL_NOTE_NAMES = { 1: "C#/Db", 3: "D#/Eb", 6: "F#/Gb", 8: "G#/Ab", 10: "A#/Bb" };
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
 const ADDITION_ORDER = [5, 4, 6, 3, 7, 2, 8, 1, 9, 0, 10, 11];
-const SECTION_COUNT = 5;
-const QUESTIONS_PER_SECTION = 60;
-const DAILY_TOTAL = 300;
+const TWO_NOTE_SHEPARD_SECONDS = 10;
+const CURRENT_OOB_SHARE = 0.70;
 const RECENT_PAIR_WINDOW = 6;
 const RECENT_NOTE_WINDOW = 3;
 
@@ -113,11 +112,11 @@ const TWO_NOTE_DAY_PROFILES = [
     focus: "新しいペアを中心に固定します。",
     placements: [[4, 4]],
     sectionMixes: [
-      { count: 60, newPair: 0.90, recentPairs: 0.00, oldPairs: 0.00, oob: 0.10, feedback: true },
-      { count: 60, newPair: 0.85, recentPairs: 0.05, oldPairs: 0.00, oob: 0.10, feedback: true },
-      { count: 60, newPair: 0.80, recentPairs: 0.05, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: false, shepardBefore: true }
+      { count: 30, newPair: 0.90, recentPairs: 0.00, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 30, newPair: 0.85, recentPairs: 0.05, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 30, newPair: 0.80, recentPairs: 0.05, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 30, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 30, newPair: 0.75, recentPairs: 0.10, oldPairs: 0.00, oob: 0.15, feedback: false, shepardBefore: true }
     ]
   },
   {
@@ -125,11 +124,11 @@ const TWO_NOTE_DAY_PROFILES = [
     focus: "新しいペアと直近ペアを比較します。",
     placements: [[4, 4], [3, 4], [4, 3]],
     sectionMixes: [
-      { count: 60, newPair: 0.70, recentPairs: 0.20, oldPairs: 0.00, oob: 0.10, feedback: true },
-      { count: 60, newPair: 0.65, recentPairs: 0.20, oldPairs: 0.00, oob: 0.15, feedback: true },
-      { count: 60, newPair: 0.60, recentPairs: 0.25, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: false, shepardBefore: true }
+      { count: 30, newPair: 0.70, recentPairs: 0.20, oldPairs: 0.00, oob: 0.10, feedback: true },
+      { count: 30, newPair: 0.65, recentPairs: 0.20, oldPairs: 0.00, oob: 0.15, feedback: true },
+      { count: 30, newPair: 0.60, recentPairs: 0.25, oldPairs: 0.00, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 30, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 30, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: false, shepardBefore: true }
     ]
   },
   {
@@ -137,11 +136,11 @@ const TWO_NOTE_DAY_PROFILES = [
     focus: "音域・上下・音色を変えて汎化します。",
     placements: ALL_PLACEMENTS,
     sectionMixes: [
-      { count: 60, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true },
-      { count: 60, newPair: 0.50, recentPairs: 0.25, oldPairs: 0.10, oob: 0.15, feedback: true },
-      { count: 60, newPair: 0.45, recentPairs: 0.25, oldPairs: 0.15, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: false, shepardBefore: true }
+      { count: 40, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true },
+      { count: 40, newPair: 0.50, recentPairs: 0.25, oldPairs: 0.10, oob: 0.15, feedback: true },
+      { count: 40, newPair: 0.45, recentPairs: 0.25, oldPairs: 0.15, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 40, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 40, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: false, shepardBefore: true }
     ]
   },
   {
@@ -150,11 +149,11 @@ const TWO_NOTE_DAY_PROFILES = [
     placements: ALL_PLACEMENTS,
     isTestDay: true,
     sectionMixes: [
-      { count: 60, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true },
-      { count: 60, newPair: 0.35, recentPairs: 0.25, oldPairs: 0.25, oob: 0.15, feedback: true },
-      { count: 60, newPair: 0.30, recentPairs: 0.25, oldPairs: 0.30, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: true, shepardBefore: true },
-      { count: 60, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: false, shepardBefore: true }
+      { count: 50, newPair: 0.40, recentPairs: 0.25, oldPairs: 0.20, oob: 0.15, feedback: true },
+      { count: 50, newPair: 0.35, recentPairs: 0.25, oldPairs: 0.25, oob: 0.15, feedback: true },
+      { count: 50, newPair: 0.30, recentPairs: 0.25, oldPairs: 0.30, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 50, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: true, shepardBefore: true },
+      { count: 50, newPair: 0.25, recentPairs: 0.25, oldPairs: 0.35, oob: 0.15, feedback: false, shepardBefore: true }
     ]
   }
 ];
@@ -507,7 +506,8 @@ function openDay(dayNumber) {
   const active = activeNotesFor(selectedDay);
   const { newNote } = splitActiveNotes(active);
   const oob = oobNotesFor(active, newNote);
-  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`} · ${DAILY_TOTAL}問`;
+  const dailyTotal = selectedDay.sectionMixes.reduce((sum, mix) => sum + mix.count, 0);
+  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`} · ${dailyTotal}問`;
   $("#introTitle").textContent = selectedDay.label;
   $("#introFocus").textContent = selectedDay.focus;
   const { black, white } = partitionByKeyColor(active);
@@ -521,7 +521,7 @@ function openDay(dayNumber) {
   const firstMix = selectedDay.sectionMixes[0];
   $("#introOob").textContent = selectedMode === "double"
     ? selectedDay.enabledPairs.length < 66
-      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 1セクション目：新規${formatPercent(mixRate(firstMix, "new"))}・OOB ${formatPercent(firstMix.oob)} ／ 今日のHard OOB：${sameIntervalHardOobPairsFor(selectedDay).map(pairName).join(" / ") || "なし"}`
+      ? `解禁済み：${selectedDay.enabledPairs.length}/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 1セクション目：新規${formatPercent(mixRate(firstMix, "new"))}・OOB ${formatPercent(firstMix.oob)} ／ Hard OOB（現在70%・過去30%）：${sameIntervalHardOobPairsFor(selectedDay).map(pairName).join(" / ") || "なし"}`
       : `解禁済み：66/66ペア ／ 新規：${pairName(selectedDay.newPair)} ／ 全ペア解禁済みのためOOBなし`
     : oob.length
     ? `選択肢：${sortedActive.map(displayNote).join("・")}・OOB ／ OOB候補：${sortedOob.map(displayNote).join("・")}`
@@ -603,8 +603,9 @@ function buildSingleNoteSectionDeck(day, mix, active, oob) {
 function buildTwoNoteSectionDeck(day, mix) {
   const count = mix.count;
   const { recentPairs, oldPairs } = splitReviewPairs(day.enabledPairs, day.newPair);
-  const hardOobPairs = sameIntervalHardOobPairsFor(day);
-  const oobCount = hardOobPairs.length ? Math.round(count * mix.oob) : 0;
+  const { currentPairs, pastPairs } = hardOobPoolsFor(day);
+  const hasOob = currentPairs.length > 0 || pastPairs.length > 0;
+  const oobCount = hasOob ? Math.round(count * mix.oob) : 0;
   const targetCount = count - oobCount;
   const allocations = allocateSectionTargets(targetCount, mix, {
     new: [day.newPair],
@@ -617,7 +618,13 @@ function buildTwoNoteSectionDeck(day, mix) {
     return buildPairTrials(allocationCount, item.items, day.placements, day.enabledPairs, "oldPair");
   });
   if (oobCount > 0) {
-    trials.push(...buildOobPairTrials(oobCount, hardOobPairs, day, "sameIntervalHardOob"));
+    const oobAllocations = allocateByWeight([
+      { pairs: currentPairs, share: CURRENT_OOB_SHARE, trialType: "currentPairHardOob" },
+      { pairs: pastPairs, share: 1 - CURRENT_OOB_SHARE, trialType: "pastPairHardOob" }
+    ].filter((pool) => pool.pairs.length), oobCount, (pool) => pool.share);
+    oobAllocations.forEach(({ item: pool, count: poolCount }) => {
+      trials.push(...buildOobPairTrials(poolCount, pool.pairs, day, pool.trialType));
+    });
   }
   return shuffle(trials);
 }
@@ -766,15 +773,47 @@ function sameIntervalSharedNotePairs(pair) {
 }
 
 function sameIntervalHardOobPairsFor(day) {
+  const { currentPairs, pastPairs } = hardOobPoolsFor(day);
+  return uniquePairs([...currentPairs, ...pastPairs]);
+}
+
+function hardOobCandidatesForPair(sourcePair, day) {
+  const activeSet = new Set(day.active);
   return uniquePairs([
-    ...sameIntervalSharedNotePairs(day.newPair),
-    transposePair(day.newPair, -1),
-    transposePair(day.newPair, 1)
-  ]).filter((pair) => classifyTwoNotePair(pair, day.enabledPairs) === "OOB");
+    ...sameIntervalSharedNotePairs(sourcePair),
+    transposePair(sourcePair, -1),
+    transposePair(sourcePair, 1)
+  ]).filter((pair) =>
+    classifyTwoNotePair(pair, day.enabledPairs) === "OOB" &&
+    pair.filter((pitchClass) => activeSet.has(pitchClass)).length === 1
+  );
+}
+
+function hardOobPoolsFor(day) {
+  const currentPairs = hardOobCandidatesForPair(day.newPair, day);
+  const currentKeys = new Set(currentPairs.map(normalizedPairKey));
+  const pastPairs = uniquePairs(day.enabledPairs.slice(0, -1).reverse()
+    .flatMap((pair) => hardOobCandidatesForPair(pair, day)))
+    .filter((pair) => !currentKeys.has(normalizedPairKey(pair)));
+  return { currentPairs, pastPairs };
 }
 
 function buildOobPairTrials(count, pairs, day, trialType) {
-  return buildPairTrials(count, pairs, day.placements, day.enabledPairs, trialType);
+  if (!pairs.length || count <= 0) return [];
+  const activeSet = new Set(day.active);
+  return shuffle(allocateByWeight(pairs, count, () => 1).flatMap(({ item: pair, count: pairCount }) => {
+    // OOBでも上声は必ず回答ボタンにある既習音にし、未知のトップ音による近道を防ぐ。
+    const cells = orderedPairRangeVariants(pair, day.placements)
+      .filter(({ pair: orderedPair }) => activeSet.has(orderedPair[1]));
+    const deck = [];
+    while (deck.length < pairCount) deck.push(...shuffle(cells));
+    return deck.slice(0, pairCount).map(({ pair: orderedPair, octaves, rangePattern }) => ({
+      ...makeTwoNoteTrial([...orderedPair], [...octaves], day.enabledPairs, trialType),
+      orderedPair: orderedPair.map(displayNote),
+      rangePattern,
+      oobSource: trialType === "pastPairHardOob" ? "past" : "current"
+    }));
+  }));
 }
 
 function researchLimit(noteCount) {
@@ -1140,9 +1179,11 @@ function skipCurrentSection() {
 
 async function startInterference() {
   showScreen("interferenceScreen");
-  let remaining = 20;
+  const duration = selectedMode === "double" ? TWO_NOTE_SHEPARD_SECONDS : 20;
+  let remaining = duration;
   $("#interferenceCountdown").textContent = remaining;
-  try { await audio.playShepard(20); } catch (_) { /* Audio was already initialized. */ }
+  $("#interferenceCopy").textContent = `下降し続けるように聞こえるShepard toneを${duration}秒再生します。終わると次のセクションに進みます。`;
+  try { await audio.playShepard(duration); } catch (_) { /* Audio was already initialized. */ }
   clearInterval(countdownId);
   countdownId = setInterval(() => {
     remaining -= 1;
@@ -1194,7 +1235,7 @@ function buildExportPayload({ partial = false } = {}) {
         : session.oob.map(displayNote),
       tonesPerQuestion: selectedMode === "double" ? 2 : 1,
       oobRule: selectedMode === "double"
-        ? "新規ペアと同じインターバルクラスの片音共有型、および新規ペアを半音上下へ平行移動したペアのみをHard OOBとして出題"
+        ? "未解禁ペアのうち既習音をちょうど1音含み、実際のトップノートが既習音になるHard OOBを出題。OOB枠内は現在ペア由来70%、過去ペア由来30%"
         : "新規音の±1/±2未習音を優先し、不足時は既習集合の境界から補充",
       ...(selectedMode === "double" ? {
         pairStage: selectedDay.stage,
@@ -1202,6 +1243,10 @@ function buildExportPayload({ partial = false } = {}) {
         newPair: selectedDay.newPair.map(displayNote),
         enabledPairs: selectedDay.enabledPairs.map((pair) => pair.map(displayNote)),
         sameIntervalHardOobPairs: sameIntervalHardOobPairsFor(selectedDay)
+          .map((pair) => pair.map(displayNote)),
+        currentPairHardOobPairs: hardOobPoolsFor(selectedDay).currentPairs
+          .map((pair) => pair.map(displayNote)),
+        pastPairHardOobPairs: hardOobPoolsFor(selectedDay).pastPairs
           .map((pair) => pair.map(displayNote))
       } : {}),
       sections: session.sections.map(({ id, index, count, limit, feedback, shepardBefore, mix }) => ({
@@ -1309,7 +1354,7 @@ function selectMode(mode) {
     ? "12音から作る66個の無順序ペアを、1ペア4日ずつ積み上げる264日間です。"
     : "成人の絶対音感学習研究をもとに、Fから全12音へ段階的に広げる8週間。";
   $("#trainingAbout").textContent = mode === "double"
-    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。1日300問（60×5セクション）で、Dayごとに新規・直近・累積の配分が変わります。"
+    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。固定・比較は150問、汎化は200問、確認は250問。5セクションに分けて新規・直近・累積を配分します。"
     : "各音を「記憶・境界・速度・定着」の4段階で学びます。1日300問（60×5セクション）で、新規音を焼き付けてから累積復習へ進みます。";
   renderWeekTabs();
   renderDays();
