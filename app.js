@@ -71,24 +71,35 @@ const FINAL_LEVELS = [
   ["FINAL CHECK", "全12音の最終確認"]
 ];
 
+const SINGLE_NOTE_FOCUS_PROFILE = {
+  level: "集中",
+  focus: "新しい音だけに集中し、対象外音との境界を作る",
+  sectionMixes: SINGLE_NOTE_DAY_PROFILES[0].sectionMixes
+};
+
 const DAYS = [];
+let singleNoteDayNumber = 1;
 ADDITION_ORDER.forEach((pitchClass, pitchIndex) => {
-  SINGLE_NOTE_DAY_PROFILES.forEach((profile, levelIndex) => {
-    const day = pitchIndex * 4 + levelIndex + 1;
+  const profiles = pitchIndex === 0
+    ? SINGLE_NOTE_DAY_PROFILES
+    : [SINGLE_NOTE_FOCUS_PROFILE, ...SINGLE_NOTE_DAY_PROFILES];
+  profiles.forEach((profile, levelIndex) => {
     const prefix = pitchIndex === 0 ? NOTE_NAMES[pitchClass] : `+ ${NOTE_NAMES[pitchClass]}`;
     DAYS.push({
-      day,
+      day: singleNoteDayNumber,
       noteCount: pitchIndex + 1,
+      choiceNotes: profile === SINGLE_NOTE_FOCUS_PROFILE ? [pitchClass] : null,
       label: `${prefix} · ${profile.level}`,
       focus: profile.focus,
       sectionMixes: profile.sectionMixes,
       level: profile.level,
-      dayInCycle: levelIndex + 1
+      dayInCycle: pitchIndex === 0 ? levelIndex + 1 : levelIndex
     });
+    singleNoteDayNumber += 1;
   });
 });
 FINAL_LEVELS.forEach((item, index) => DAYS.push({
-  day: 49 + index,
+  day: singleNoteDayNumber + index,
   noteCount: 12,
   label: item[0],
   focus: item[1],
@@ -388,7 +399,8 @@ function showScreen(id) {
 }
 
 function activeNotesFor(day) {
-  return selectedMode === "double" ? day.active : ADDITION_ORDER.slice(0, day.noteCount);
+  if (selectedMode === "double") return day.active;
+  return day.choiceNotes ?? ADDITION_ORDER.slice(0, day.noteCount);
 }
 
 function oobNotesFor(active, newNote) {
@@ -507,7 +519,7 @@ function openDay(dayNumber) {
   const { newNote } = splitActiveNotes(active);
   const oob = oobNotesFor(active, newNote);
   const dailyTotal = selectedDay.sectionMixes.reduce((sum, mix) => sum + mix.count, 0);
-  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${selectedDay.noteCount} PITCH${selectedDay.noteCount === 1 ? "" : "ES"}`} · ${dailyTotal}問`;
+  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${active.length} PITCH${active.length === 1 ? "" : "ES"}`} · ${dailyTotal}問`;
   $("#introTitle").textContent = selectedDay.label;
   $("#introFocus").textContent = selectedDay.focus;
   const { black, white } = partitionByKeyColor(active);
@@ -821,6 +833,7 @@ function researchLimit(noteCount) {
 }
 
 function sectionsFor(day) {
+  const activeNoteCount = selectedMode === "single" ? activeNotesFor(day).length : day.noteCount;
   return day.sectionMixes.map((mix, index) => ({
     id: `section-${index + 1}`,
     index,
@@ -829,7 +842,7 @@ function sectionsFor(day) {
     shepardBefore: Boolean(mix.shepardBefore),
     limit: selectedMode === "double"
       ? null
-      : (index >= 4 ? researchLimit(day.noteCount) : index >= 2 ? 3000 : 5000),
+      : (index >= 4 ? researchLimit(activeNoteCount) : index >= 2 ? 3000 : 5000),
     mix
   }));
 }
@@ -1349,13 +1362,13 @@ function selectMode(mode) {
   selectedMode = mode;
   selectedWeek = 1;
   selectedDay = (mode === "double" ? DOUBLE_DAYS : DAYS)[0];
-  $("#versionEyebrow").textContent = mode === "double" ? "264 DAYS · 66-PAIR / TWO-NOTE TRAINING" : "8 WEEKS · SINGLE-NOTE TRAINING";
+  $("#versionEyebrow").textContent = mode === "double" ? "264 DAYS · 66-PAIR / TWO-NOTE TRAINING" : "67 DAYS · SINGLE-NOTE TRAINING";
   $("#versionCopy").textContent = mode === "double"
     ? "12音から作る66個の無順序ペアを、1ペア4日ずつ積み上げる264日間です。"
-    : "成人の絶対音感学習研究をもとに、Fから全12音へ段階的に広げる8週間。";
+    : "成人の絶対音感学習研究をもとに、集中Dayを挟みながらFから全12音へ段階的に広げる67日間。";
   $("#trainingAbout").textContent = mode === "double"
     ? "E–Fから始め、毎ステージ1ペアだけ解禁します。固定・比較は150問、汎化は200問、確認は250問。5セクションに分けて新規・直近・累積を配分します。"
-    : "各音を「記憶・境界・速度・定着」の4段階で学びます。1日300問（60×5セクション）で、新規音を焼き付けてから累積復習へ進みます。";
+    : "追加音はまず「集中」で新規音とOOBだけを聞き、その後「記憶・境界・速度・定着」の4段階で累積学習します。1日300問（60×5セクション）です。";
   renderWeekTabs();
   renderDays();
   showScreen("homeScreen");
