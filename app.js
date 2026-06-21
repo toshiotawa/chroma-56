@@ -906,7 +906,8 @@ function renderSection() {
 }
 
 function answerButtonMarkup(label) {
-  return `<button class="answer-button ${label === "OOB" ? "oob" : ""}" type="button" data-answer="${label}" disabled>${label}</button>`;
+  const shortcut = label === "OOB" && selectedMode === "single" ? ' aria-keyshortcuts="O"' : "";
+  return `<button class="answer-button ${label === "OOB" ? "oob" : ""}" type="button" data-answer="${label}"${shortcut} disabled>${label}</button>`;
 }
 
 function renderAnswers() {
@@ -969,6 +970,15 @@ function submitTwoNoteAnswerWithSpace(event) {
   if (!session?.accepting || session.paused || !submit || submit.disabled) return;
   event.preventDefault();
   submit.click();
+}
+
+function submitSingleNoteOobWithO(event) {
+  if (event.code !== "KeyO" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || selectedMode !== "single") return;
+  if (event.target instanceof Element && event.target.closest("input, textarea, select, dialog")) return;
+  const oob = $('.answer-button[data-answer="OOB"]');
+  if (!session?.accepting || session.paused || !oob || oob.disabled) return;
+  event.preventDefault();
+  oob.click();
 }
 
 function updateProgress() {
@@ -1393,6 +1403,7 @@ $("#volumeSlider").addEventListener("input", (event) => {
   audio.setVolume(percent / 100);
 });
 document.addEventListener("keydown", submitTwoNoteAnswerWithSpace);
+document.addEventListener("keydown", submitSingleNoteOobWithO);
 
 selectMode("single");
 showScreen("modeScreen");
