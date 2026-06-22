@@ -11,12 +11,23 @@ const RECENT_PAIR_WINDOW = 6;
 const RECENT_NOTE_WINDOW = 3;
 
 const SINGLE_NOTE_OCTAVES = [4, 5, 6];
-const SINGLE_NOTE_TIMBRES = 5;
+const TRAINING_PIANO = {
+  library: "smplr",
+  instrument: "SplendidGrandPiano",
+  velocity: 90,
+  volume: 90,
+  decayTime: 0.8,
+  duration: 1.0,
+  effects: "none",
+  range: "C2-B6"
+};
+const SMPLR_MODULE_URL = "https://unpkg.com/smplr@0.20.0/dist/index.mjs";
+const TRAINING_MIDI_NOTES = Array.from({ length: 60 }, (_, index) => 36 + index);
 
 const SINGLE_NOTE_DAY_PROFILES = [
   {
     level: "記憶",
-    focus: "新しい音の輪郭を、5つの音色で結びつける",
+    focus: "新しい音の輪郭を、同じピアノ音で結びつける",
     sectionMixes: [
       { count: 60, newNote: 0.85, recentNotes: 0.00, oldNotes: 0.00, oob: 0.10, feedback: true },
       { count: 60, newNote: 0.80, recentNotes: 0.05, oldNotes: 0.00, oob: 0.10, feedback: true },
@@ -62,7 +73,7 @@ const SINGLE_NOTE_DAY_PROFILES = [
 
 const FINAL_LEVELS = [
   ["全音統合", "全12音のカテゴリーをひとつに統合する"],
-  ["音色汎化", "5つの音色が変わっても同じ音名を捉える"],
+  ["ピアノ定着", "同じピアノ音で全12音の反射を固める"],
   ["音域汎化", "3オクターブを越えてクロマを捉える"],
   ["近接音", "半音隣の取り違えを減らす"],
   ["高速判断", "全12音を2秒前後で判断する"],
@@ -114,7 +125,6 @@ const TWO_NOTE_ADDITION_ORDER = [4, 5, 9, 10, 2, 1, 7, 8, 11, 0, 3, 6]; // E F A
 const TWO_NOTE_PAIR_STAGES = TWO_NOTE_ADDITION_ORDER.flatMap((newNote, newIndex) =>
   TWO_NOTE_ADDITION_ORDER.slice(0, newIndex).map((knownNote) => [knownNote, newNote])
 );
-const TWO_NOTE_TIMBRES = 5;
 const ALL_PLACEMENTS = [3, 4, 5].flatMap((first) => [3, 4, 5].map((second) => [first, second]));
 const pairName = (pair) => pair.map((note) => TWO_NOTE_NOTE_NAMES[note]).join(" + ");
 const TWO_NOTE_DAY_PROFILES = [
@@ -144,7 +154,7 @@ const TWO_NOTE_DAY_PROFILES = [
   },
   {
     name: "汎化",
-    focus: "音域・上下・音色を変えて汎化します。",
+    focus: "音域と上下を変えて汎化します。",
     placements: ALL_PLACEMENTS,
     sectionMixes: [
       { count: 40, newPair: 0.55, recentPairs: 0.25, oldPairs: 0.05, oob: 0.15, feedback: true },
@@ -192,12 +202,12 @@ const DOUBLE_DAYS = TWO_NOTE_PAIR_STAGES.flatMap((newPair, stageIndex) =>
   })
 );
 
-const TIMBRE_NAMES = ["sine", "triangle", "sawtooth", "square", "FM"];
-
 class AudioEngine {
   constructor() {
     this.ctx = null;
     this.master = null;
+    this.piano = null;
+    this.pianoLoad = null;
     this.volume = 0.35;
     this.activeNodes = new Set();
   }
@@ -208,14 +218,21 @@ class AudioEngine {
       if (!AudioContextClass) throw new Error("このブラウザはWeb Audio APIに対応していません。");
       this.ctx = new AudioContextClass();
       this.master = this.ctx.createGain();
-      const compressor = this.ctx.createDynamicsCompressor();
-      compressor.threshold.value = -20;
-      compressor.knee.value = 18;
-      compressor.ratio.value = 8;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.18;
       this.master.gain.value = this.volume;
-      this.master.connect(compressor).connect(this.ctx.destination);
+      this.master.connect(this.ctx.destination);
+      this.pianoLoad = import(SMPLR_MODULE_URL).then(({ SplendidGrandPiano }) => {
+        this.piano = new SplendidGrandPiano(this.ctx, {
+          velocity: TRAINING_PIANO.velocity,
+          volume: TRAINING_PIANO.volume,
+          decayTime: TRAINING_PIANO.decayTime,
+          destination: this.master,
+          notesToLoad: {
+            notes: TRAINING_MIDI_NOTES,
+            velocityRange: [TRAINING_PIANO.velocity, TRAINING_PIANO.velocity]
+          }
+        });
+        return this.piano.load;
+      });
     }
     // Some embedded browsers leave resume() pending until the next gesture.
     // Do not block the UI; every play button is itself another valid gesture.
@@ -228,6 +245,7 @@ class AudioEngine {
   }
 
   stopAll() {
+    this.piano?.stop();
     for (const node of this.activeNodes) {
       try { node.stop(); } catch (_) { /* already stopped */ }
     }
@@ -247,82 +265,29 @@ class AudioEngine {
     node.addEventListener("ended", () => this.activeNodes.delete(node), { once: true });
   }
 
-  envelope(gain, now, duration, peak) {
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(peak, now + 0.1);
-    gain.gain.setValueAtTime(peak, now + Math.max(0.11, duration - 0.1));
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  async playTone(midi) {
+    await this.init();
+    await this.pianoLoad;
+    this.stopAll();
+    this.piano.start({
+      note: midi,
+      velocity: TRAINING_PIANO.velocity,
+      duration: TRAINING_PIANO.duration
+    });
   }
 
-  async playTone(midi, timbre) {
+  async playChord(midis) {
     await this.init();
+    await this.pianoLoad;
     this.stopAll();
     const now = this.ctx.currentTime + 0.015;
-    const duration = 0.8;
-    const frequency = 440 * 2 ** ((midi - 69) / 12);
-    const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = Math.min(7000, Math.max(1500, frequency * 8));
-    filter.Q.value = 0.5;
-    this.envelope(gain, now, duration, timbre === 4 ? 0.16 : 0.2);
-    gain.connect(filter).connect(this.master);
-
-    if (timbre < 4) {
-      const oscillator = this.ctx.createOscillator();
-      oscillator.type = ["sine", "triangle", "sawtooth", "square"][timbre];
-      oscillator.frequency.setValueAtTime(frequency, now);
-      oscillator.detune.setValueAtTime((Math.random() - 0.5) * 2, now);
-      oscillator.connect(gain);
-      oscillator.start(now);
-      oscillator.stop(now + duration + 0.03);
-      this.track(oscillator);
-    } else {
-      const carrier = this.ctx.createOscillator();
-      const modulator = this.ctx.createOscillator();
-      const modulation = this.ctx.createGain();
-      carrier.type = "sine";
-      modulator.type = "sine";
-      carrier.frequency.setValueAtTime(frequency, now);
-      modulator.frequency.setValueAtTime(frequency * 2, now);
-      modulation.gain.setValueAtTime(frequency * 1.25, now);
-      modulation.gain.exponentialRampToValueAtTime(0.1, now + duration);
-      modulator.connect(modulation).connect(carrier.frequency);
-      carrier.connect(gain);
-      carrier.start(now);
-      modulator.start(now);
-      carrier.stop(now + duration + 0.03);
-      modulator.stop(now + duration + 0.03);
-      this.track(carrier);
-      this.track(modulator);
-    }
-  }
-
-  async playChord(midis, timbre) {
-    await this.init();
-    this.stopAll();
-    const now = this.ctx.currentTime + 0.015;
-    const duration = 0.9;
     midis.forEach((midi) => {
-      const frequency = 440 * 2 ** ((midi - 69) / 12);
-      const gain = this.ctx.createGain();
-      const oscillator = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      oscillator.type = ["sine", "triangle", "sawtooth", "square", "triangle"][timbre];
-      oscillator.frequency.setValueAtTime(frequency, now);
-      oscillator.detune.setValueAtTime((Math.random() - 0.5) * 2, now);
-      filter.type = "lowpass";
-      filter.frequency.value = Math.min(6500, Math.max(1400, frequency * 8));
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(0.105, now + 0.08);
-      gain.gain.setValueAtTime(0.105, now + duration - 0.12);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      oscillator.connect(gain).connect(filter).connect(this.master);
-      oscillator.start(now);
-      oscillator.stop(now + duration + 0.03);
-      this.track(oscillator);
+      this.piano.start({
+        note: midi,
+        velocity: TRAINING_PIANO.velocity,
+        time: now,
+        duration: TRAINING_PIANO.duration
+      });
     });
   }
 
@@ -572,15 +537,12 @@ function allocateByWeight(items, total, weightFor) {
 }
 
 function balancedPitchDeck(pitchClass, count, isOob) {
-  const cells = SINGLE_NOTE_OCTAVES.flatMap((octave) =>
-    Array.from({ length: SINGLE_NOTE_TIMBRES }, (_, timbre) => ({
-      pitchClass,
-      midi: (octave + 1) * 12 + pitchClass,
-      timbre,
-      expected: isOob ? "OOB" : displayNote(pitchClass),
-      isOob
-    }))
-  );
+  const cells = SINGLE_NOTE_OCTAVES.map((octave) => ({
+    pitchClass,
+    midi: (octave + 1) * 12 + pitchClass,
+    expected: isOob ? "OOB" : displayNote(pitchClass),
+    isOob
+  }));
   const deck = [];
   while (deck.length < count) deck.push(...shuffle(cells));
   return deck.slice(0, count);
@@ -1107,16 +1069,11 @@ async function playTrial() {
   const section = currentSection();
   const trial = currentSectionDeck()[session.trialIndex];
   if (!trial) return;
-  if (selectedMode === "double") {
-    // The two-note curriculum specifies exact octave placements. Do not pull
-    // wide intervals back toward the center: those placements are the lesson.
-    trial.timbre = Math.floor(Math.random() * TWO_NOTE_TIMBRES);
-  }
   session.current = trial;
   $("#playTrialButton").disabled = true;
   $("#playTrialButton").innerHTML = '<span>再生中…</span>';
-  if (selectedMode === "double") await audio.playChord(trial.midis, trial.timbre);
-  else await audio.playTone(trial.midi, trial.timbre);
+  if (selectedMode === "double") await audio.playChord(trial.midis);
+  else await audio.playTone(trial.midi);
   session.startedAt = performance.now();
   session.accepting = true;
   setAnswersEnabled(true);
@@ -1159,7 +1116,8 @@ function answerTrial(answer) {
     question: {
       pitchClasses: selectedMode === "double" ? session.current.pitchClasses.map(displayNote) : [NOTE_NAMES[session.current.pitchClass]],
       midi: selectedMode === "double" ? session.current.midis : [session.current.midi],
-      timbre: TIMBRE_NAMES[session.current.timbre],
+      instrument: TRAINING_PIANO.instrument,
+      velocity: TRAINING_PIANO.velocity,
       ...(selectedMode === "double" ? {
         trialType: session.current.trialType,
         orderedPair: session.current.orderedPair,

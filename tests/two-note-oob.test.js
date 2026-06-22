@@ -23,6 +23,7 @@ for (const day of DOUBLE_DAYS) {
     if (deck.length !== mix.count) {
       failures.push(\`Day \${day.day}: deck has \${deck.length}/\${mix.count} trials\`);
     }
+    if (deck.some((trial) => "timbre" in trial)) failures.push(\`Day \${day.day}: timbre randomization remains\`);
 
     const pools = hardOobPoolsFor(day);
     const oobTrials = deck.filter((item) => item.isOob);

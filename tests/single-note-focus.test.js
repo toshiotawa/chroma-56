@@ -15,6 +15,10 @@ const focusDays = DAYS.filter((day) => day.level === "集中");
 
 if (DAYS.length !== 67) failures.push(\`Expected 67 days, got \${DAYS.length}\`);
 if (focusDays.length !== 11) failures.push(\`Expected 11 focus days, got \${focusDays.length}\`);
+if (TRAINING_PIANO.instrument !== "SplendidGrandPiano") failures.push("Training instrument is not SplendidGrandPiano");
+if (TRAINING_PIANO.velocity !== 90) failures.push("Piano velocity is not fixed at 90");
+if (TRAINING_PIANO.duration !== 1 || TRAINING_PIANO.decayTime !== 0.8) failures.push("Piano timing is not fixed");
+if (TRAINING_MIDI_NOTES[0] !== 36 || TRAINING_MIDI_NOTES.at(-1) !== 95) failures.push("Loaded piano range is not C2-B6");
 
 for (let index = 0; index < focusDays.length; index += 1) {
   const day = focusDays[index];
@@ -37,6 +41,7 @@ for (let index = 0; index < focusDays.length; index += 1) {
     if (deck.some((trial) => !trial.isOob && trial.pitchClass !== expectedNote)) {
       failures.push(\`Day \${day.day}: a prior note appears as a target\`);
     }
+    if (deck.some((trial) => "timbre" in trial)) failures.push(\`Day \${day.day}: timbre randomization remains\`);
   }
 }
 
