@@ -181,6 +181,11 @@ h1 em { color: var(--coral); font-weight: 400; }
 .feedback.good { color: #277443; }
 .feedback.bad { color: #b23827; }
 
+@media (min-width: 801px) {
+  .piano-answer-area { max-width: 560px; }
+  .piano-keyboard { height: 168px; }
+}
+
 .interference-screen { max-width: 780px; margin: 0 auto; text-align: center; }
 .interference-screen p:not(.eyebrow) { max-width: 620px; margin: 28px auto; color: var(--muted); line-height: 1.8; }
 .shepard-visual { height: 150px; display: flex; align-items: center; justify-content: center; gap: 12px; margin: 52px 0 30px; overflow: hidden; }
