@@ -373,6 +373,7 @@ let selectedMode = "single";
 let selectedDay = DAYS[0];
 let selectedWeek = 1;
 let session = null;
+let answerLayout = "piano";
 let completedExport = null;
 let timerId = null;
 let countdownId = null;
@@ -905,31 +906,65 @@ function renderSection() {
   prepareTrial();
 }
 
-function answerButtonMarkup(label) {
+function answerButtonMarkup(label, extraClass = "") {
   const shortcut = label === "OOB" && selectedMode === "single" ? ' aria-keyshortcuts="O"' : "";
-  return `<button class="answer-button ${label === "OOB" ? "oob" : ""}" type="button" data-answer="${label}"${shortcut} disabled>${label}</button>`;
+  return `<button class="answer-button ${label === "OOB" ? "oob" : ""} ${extraClass}" type="button" data-answer="${label}" data-available="true"${shortcut} disabled>${label}</button>`;
+}
+
+function pianoKeyMarkup(note, color, activeSet) {
+  const label = displayNote(note);
+  const available = activeSet.has(note);
+  const unavailableCopy = available ? "" : "（現在の対象外）";
+  return `<button class="answer-button piano-key piano-key-${color} ${available ? "available" : "unavailable"}" type="button" data-note="${note}" data-answer="${label}" data-available="${available}" aria-label="${label}${unavailableCopy}" ${available ? "" : 'tabindex="-1"'} disabled><span>${label}</span></button>`;
+}
+
+function answerLayoutSwitchMarkup() {
+  return `<div class="answer-layout-switch" role="group" aria-label="回答の表示">
+    <button class="layout-option ${answerLayout === "piano" ? "selected" : ""}" type="button" data-answer-layout="piano" aria-pressed="${answerLayout === "piano"}">鍵盤</button>
+    <button class="layout-option ${answerLayout === "buttons" ? "selected" : ""}" type="button" data-answer-layout="buttons" aria-pressed="${answerLayout === "buttons"}">音名ボタン</button>
+  </div>`;
 }
 
 function renderAnswers() {
   const answerNotes = session.active;
   const { black, white } = partitionByKeyColor(answerNotes);
-  const whiteLabels = white.map(displayNote);
-  if (selectedMode === "double" && session.hasOob) whiteLabels.push("OOB");
-  else if (session.oob.length) whiteLabels.push("OOB");
-  const blackRow = black.length
-    ? `<div class="answer-row answer-row-sharps">${black.map(displayNote).map(answerButtonMarkup).join("")}</div>`
-    : "";
-  const whiteRow = `<div class="answer-row answer-row-naturals">${whiteLabels.map(answerButtonMarkup).join("")}</div>`;
+  const hasOobAnswer = selectedMode === "double" ? session.hasOob : session.oob.length > 0;
+  let answerSurface;
+  if (answerLayout === "piano") {
+    const activeSet = new Set(answerNotes);
+    const whiteKeys = [0, 2, 4, 5, 7, 9, 11].map((note) => pianoKeyMarkup(note, "white", activeSet)).join("");
+    const blackKeys = [1, 3, 6, 8, 10].map((note) => pianoKeyMarkup(note, "black", activeSet)).join("");
+    const oobButton = hasOobAnswer ? answerButtonMarkup("OOB", "piano-oob") : "";
+    answerSurface = `<div class="piano-answer-area">
+      <div class="piano-keyboard" aria-label="1オクターブの回答鍵盤">${whiteKeys}${blackKeys}</div>
+      ${oobButton}
+    </div>`;
+  } else {
+    const blackRow = black.length
+      ? `<div class="answer-row answer-row-sharps">${black.map(displayNote).map((label) => answerButtonMarkup(label)).join("")}</div>`
+      : "";
+    const whiteLabels = white.map(displayNote);
+    if (hasOobAnswer) whiteLabels.push("OOB");
+    const whiteRow = `<div class="answer-row answer-row-naturals">${whiteLabels.map((label) => answerButtonMarkup(label)).join("")}</div>`;
+    answerSurface = `<div class="note-button-answer-area">${blackRow}${whiteRow}</div>`;
+  }
   const submit = selectedMode === "double"
     ? '<button id="submitAnswerButton" class="answer-submit" type="button" aria-keyshortcuts="Space" disabled>回答する <span>0 / 2</span><kbd>Space</kbd></button>'
     : "";
-  $("#answerGrid").innerHTML = blackRow + whiteRow + submit;
+  $("#answerGrid").innerHTML = answerLayoutSwitchMarkup() + answerSurface + submit;
+  $$("[data-answer-layout]").forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.answerLayout === answerLayout) return;
+    answerLayout = button.dataset.answerLayout;
+    renderAnswers();
+    if (session.accepting && !session.paused) setAnswersEnabled(true);
+  }));
   $$(".answer-button").forEach((button) => button.addEventListener("click", () => {
     if (selectedMode === "double" && button.dataset.answer === "OOB") answerTrial(["OOB"]);
     else if (selectedMode === "double") toggleAnswer(button.dataset.answer);
     else answerTrial(button.dataset.answer);
   }));
   $("#submitAnswerButton")?.addEventListener("click", () => answerTrial([...session.selectedAnswers]));
+  if (selectedMode === "double") syncSelectedAnswers();
 }
 
 function toggleAnswer(answer) {
@@ -941,6 +976,10 @@ function toggleAnswer(answer) {
     session.selectedAnswers.push(answer);
   }
 
+  syncSelectedAnswers();
+}
+
+function syncSelectedAnswers() {
   const counts = session.selectedAnswers.reduce((map, item) => {
     map[item] = (map[item] || 0) + 1;
     return map;
@@ -953,12 +992,15 @@ function toggleAnswer(answer) {
   });
 
   const submit = $("#submitAnswerButton");
-  submit.disabled = session.selectedAnswers.length !== 2;
+  if (!submit) return;
+  submit.disabled = !session.accepting || session.paused || session.selectedAnswers.length !== 2;
   submit.querySelector("span").textContent = `${session.selectedAnswers.length} / 2`;
 }
 
 function setAnswersEnabled(enabled) {
-  $$(".answer-button").forEach((button) => { button.disabled = !enabled; });
+  $$(".answer-button").forEach((button) => {
+    button.disabled = !enabled || button.dataset.available !== "true";
+  });
   const submit = $("#submitAnswerButton");
   if (submit) submit.disabled = !enabled || session.selectedAnswers.length !== 2;
 }
