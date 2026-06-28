@@ -1245,6 +1245,7 @@ function answerTrial(answer) {
     const expectedText = selectedMode === "double" && session.current.isOob
       ? `OOB（${session.current.pitchClasses.map(displayNote).join(" + ")}）`
       : Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
+    const voicingChordText = isVoicingMode() ? ` · ${session.current.chordName}` : "";
     const expectedAnswers = Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected];
     const chosenAnswers = answer === null ? [] : (Array.isArray(answer) ? answer : [answer]);
     expectedAnswers.forEach((expected) => {
@@ -1254,8 +1255,8 @@ function answerTrial(answer) {
       .filter((chosen) => !expectedAnswers.includes(chosen))
       .forEach((chosen) => $(`.answer-button[data-answer="${chosen}"]`)?.classList.add("wrong"));
     $("#feedback").textContent = correct
-      ? selectedMode === "double" ? `正解は ${expectedText} · ${rt} ms` : `正解 · ${rt} ms`
-      : answer === null ? `時間切れ · 正解は ${expectedText}` : `正解は ${expectedText}`;
+      ? selectedMode === "double" ? `正解は ${expectedText} · ${rt} ms` : `正解${voicingChordText} · ${rt} ms`
+      : answer === null ? `時間切れ · 正解は ${expectedText}${voicingChordText}` : `正解は ${expectedText}${voicingChordText}`;
     $("#feedback").className = `feedback ${correct ? "good" : "bad"}`;
   } else {
     $("#feedback").textContent = answer === null ? "時間切れ" : "回答を受け付けました";
