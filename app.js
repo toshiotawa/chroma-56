@@ -11,6 +11,9 @@ const RECENT_PAIR_WINDOW = 6;
 const RECENT_NOTE_WINDOW = 3;
 
 const SINGLE_NOTE_OCTAVES = [4, 5, 6];
+const VOICING_REFERENCE_TOP = 11; // B
+const VOICING_TOP_OCTAVES = [4, 5, 6];
+const VOICING_BASS_OCTAVE = 2;
 const TRAINING_PIANO = {
   library: "smplr",
   instrument: "SplendidGrandPiano",
@@ -23,6 +26,21 @@ const TRAINING_PIANO = {
 };
 const SMPLR_MODULE_URL = "https://unpkg.com/smplr@0.20.0/dist/index.mjs";
 const TRAINING_MIDI_NOTES = Array.from({ length: 60 }, (_, index) => 36 + index);
+
+const VOICING_PATTERNS = [
+  { symbol: "M7", root: 0, voices: [0, 4, 7, 11] },
+  { symbol: "m7", root: 1, voices: [1, 4, 8, 11] },
+  { symbol: "m9", root: 9, voices: [0, 4, 7, 11] },
+  { symbol: "M9", root: 9, voices: [1, 4, 8, 11] },
+  { symbol: "13", root: 2, voices: [0, 4, 6, 11] },
+  { symbol: "7alt", root: 8, voices: [0, 4, 6, 11] },
+  { symbol: "M9", root: 4, voices: [3, 6, 8, 11] },
+  { symbol: "m9", root: 4, voices: [2, 6, 7, 11] },
+  { symbol: "M7", root: 7, voices: [2, 6, 7, 11] },
+  { symbol: "m7", root: 8, voices: [3, 6, 8, 11] },
+  { symbol: "6", root: 11, voices: [3, 6, 8, 11] },
+  { symbol: "m6", root: 11, voices: [2, 6, 8, 11] }
+];
 
 const SINGLE_NOTE_DAY_PROFILES = [
   {
@@ -347,6 +365,24 @@ function displayNote(note) {
   return selectedMode === "double" ? TWO_NOTE_NOTE_NAMES[note] : (DUAL_NOTE_NAMES[note] || NOTE_NAMES[note]);
 }
 
+function isVoicingMode() {
+  return selectedMode === "voicing";
+}
+
+function isSingleAnswerMode() {
+  return selectedMode === "single" || selectedMode === "voicing";
+}
+
+function daysForMode(mode = selectedMode) {
+  return mode === "double" ? DOUBLE_DAYS : DAYS;
+}
+
+function modeLabel(mode = selectedMode) {
+  if (mode === "double") return "TWO NOTES";
+  if (mode === "voicing") return "VOICING";
+  return "SINGLE NOTE";
+}
+
 function sortChromaticallyFromC(notes) {
   return [...notes].sort((first, second) => first - second);
 }
@@ -450,7 +486,7 @@ function renderSectionProgram(day) {
 
 function renderDays() {
   const start = (selectedWeek - 1) * 7;
-  const days = (selectedMode === "double" ? DOUBLE_DAYS : DAYS).slice(start, start + 7);
+  const days = daysForMode().slice(start, start + 7);
   $("#dayGrid").innerHTML = days.map((day, index) => `
     <button class="day-card ${index === 0 ? "featured" : ""}" type="button" data-day="${day.day}">
       <span class="day-number">DAY ${String(day.day).padStart(2, "0")}</span>
@@ -462,7 +498,7 @@ function renderDays() {
 }
 
 function renderWeekTabs() {
-  const totalDays = selectedMode === "double" ? DOUBLE_DAYS.length : DAYS.length;
+  const totalDays = daysForMode().length;
   const weekCount = Math.ceil(totalDays / 7);
   $("#weekTabs").innerHTML = Array.from({ length: weekCount }, (_, index) => {
     const week = index + 1;
@@ -480,12 +516,12 @@ function renderWeekTabs() {
 }
 
 function openDay(dayNumber) {
-  selectedDay = (selectedMode === "double" ? DOUBLE_DAYS : DAYS)[dayNumber - 1];
+  selectedDay = daysForMode()[dayNumber - 1];
   const active = activeNotesFor(selectedDay);
   const { newNote } = splitActiveNotes(active);
   const oob = oobNotesFor(active, newNote);
   const dailyTotal = selectedDay.sectionMixes.reduce((sum, mix) => sum + mix.count, 0);
-  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? "TWO NOTES" : `${active.length} PITCH${active.length === 1 ? "" : "ES"}`} · ${dailyTotal}問`;
+  $("#introDay").textContent = `DAY ${String(selectedDay.day).padStart(2, "0")} · ${selectedMode === "double" ? modeLabel() : `${active.length} PITCH${active.length === 1 ? "" : "ES"} · ${modeLabel()}`} · ${dailyTotal}問`;
   $("#introTitle").textContent = selectedDay.label;
   $("#introFocus").textContent = selectedDay.focus;
   const { black, white } = partitionByKeyColor(active);
@@ -537,12 +573,65 @@ function allocateByWeight(items, total, weightFor) {
 }
 
 function balancedPitchDeck(pitchClass, count, isOob) {
+  if (isVoicingMode()) return balancedVoicingDeck(pitchClass, count, isOob);
   const cells = SINGLE_NOTE_OCTAVES.map((octave) => ({
     pitchClass,
     midi: (octave + 1) * 12 + pitchClass,
     expected: isOob ? "OOB" : displayNote(pitchClass),
     isOob
   }));
+  const deck = [];
+  while (deck.length < count) deck.push(...shuffle(cells));
+  return deck.slice(0, count);
+}
+
+function transposePitchClass(pitchClass, semitones) {
+  return (pitchClass + semitones + 12) % 12;
+}
+
+function chordName(root, symbol) {
+  return `${NOTE_NAMES[root]}${symbol}`;
+}
+
+function midiFor(pitchClass, octave) {
+  return (octave + 1) * 12 + pitchClass;
+}
+
+function closestMidiBelow(pitchClass, topMidi) {
+  let midi = midiFor(pitchClass, Math.floor(topMidi / 12) - 1);
+  while (midi >= topMidi) midi -= 12;
+  while (midi < topMidi - 12) midi += 12;
+  return midi;
+}
+
+function buildVoicing(pitchClass, topOctave, pattern) {
+  const shift = pitchClass - VOICING_REFERENCE_TOP;
+  const root = transposePitchClass(pattern.root, shift);
+  const voicePitchClasses = pattern.voices.map((note) => transposePitchClass(note, shift));
+  const topMidi = midiFor(pitchClass, topOctave);
+  const innerMidis = voicePitchClasses
+    .filter((note) => note !== pitchClass)
+    .map((note) => closestMidiBelow(note, topMidi))
+    .sort((first, second) => first - second);
+  return {
+    pitchClass,
+    midi: topMidi,
+    root,
+    rootMidi: midiFor(root, VOICING_BASS_OCTAVE),
+    voicingPitchClasses: [...innerMidis.map((midi) => midi % 12), pitchClass],
+    voicingMidis: [...innerMidis, topMidi],
+    chordName: chordName(root, pattern.symbol)
+  };
+}
+
+function balancedVoicingDeck(pitchClass, count, isOob) {
+  const cells = VOICING_TOP_OCTAVES.flatMap((octave) =>
+    VOICING_PATTERNS.map((pattern) => ({
+      ...buildVoicing(pitchClass, octave, pattern),
+      expected: isOob ? "OOB" : displayNote(pitchClass),
+      isOob
+    }))
+  );
   const deck = [];
   while (deck.length < count) deck.push(...shuffle(cells));
   return deck.slice(0, count);
@@ -609,7 +698,7 @@ function buildSessionDecks(day, active, oob) {
     let deck = selectedMode === "double"
       ? buildTwoNoteSectionDeck(day, mix)
       : buildSingleNoteSectionDeck(day, mix, active, oob);
-    if (selectedMode === "single" && mix.feedback === false) deck = orderWithLargeJumps(deck);
+    if (isSingleAnswerMode() && mix.feedback === false) deck = orderWithLargeJumps(deck);
     return deck.map((trial) => ({ ...trial, sectionIndex: index }));
   });
 }
@@ -863,13 +952,15 @@ function renderSection() {
     : `セクション ${section.index + 1}：表示なしで確かめる`;
   $("#instructionText").textContent = selectedMode === "double"
     ? (section.feedback ? "解禁済みペアなら音名を2つ、それ以外のペアならOOBを1回押してください。" : "音名を2つ、またはOOBを選んでください。正解は最後まで表示されません。")
+    : isVoicingMode()
+    ? (section.feedback ? "コードのトップノートを聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。")
     : (section.feedback ? "音を聴き、音名またはOOBを選んでください。" : "このセクションでは、正解は最後まで表示されません。");
   renderAnswers();
   prepareTrial();
 }
 
 function answerButtonMarkup(label, extraClass = "") {
-  const shortcut = label === "OOB" && selectedMode === "single" ? ' aria-keyshortcuts="O"' : "";
+  const shortcut = label === "OOB" && isSingleAnswerMode() ? ' aria-keyshortcuts="O"' : "";
   return `<button class="answer-button ${label === "OOB" ? "oob" : ""} ${extraClass}" type="button" data-answer="${label}" data-available="true"${shortcut} disabled>${label}</button>`;
 }
 
@@ -977,7 +1068,7 @@ function submitTwoNoteAnswerWithSpace(event) {
 }
 
 function submitSingleNoteOobWithO(event) {
-  if (event.code !== "KeyO" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || selectedMode !== "single") return;
+  if (event.code !== "KeyO" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !isSingleAnswerMode()) return;
   if (event.target instanceof Element && event.target.closest("input, textarea, select, dialog")) return;
   const oob = $('.answer-button[data-answer="OOB"]');
   if (!session?.accepting || session.paused || !oob || oob.disabled) return;
@@ -1073,6 +1164,7 @@ async function playTrial() {
   $("#playTrialButton").disabled = true;
   $("#playTrialButton").innerHTML = '<span>再生中…</span>';
   if (selectedMode === "double") await audio.playChord(trial.midis);
+  else if (isVoicingMode()) await audio.playChord([trial.rootMidi, ...trial.voicingMidis]);
   else await audio.playTone(trial.midi);
   session.startedAt = performance.now();
   session.accepting = true;
@@ -1114,14 +1206,30 @@ function answerTrial(answer) {
     section: section.id,
     sectionIndex: section.index,
     question: {
-      pitchClasses: selectedMode === "double" ? session.current.pitchClasses.map(displayNote) : [NOTE_NAMES[session.current.pitchClass]],
-      midi: selectedMode === "double" ? session.current.midis : [session.current.midi],
+      pitchClasses: selectedMode === "double"
+        ? session.current.pitchClasses.map(displayNote)
+        : isVoicingMode()
+        ? session.current.voicingPitchClasses.map(displayNote)
+        : [NOTE_NAMES[session.current.pitchClass]],
+      midi: selectedMode === "double"
+        ? session.current.midis
+        : isVoicingMode()
+        ? [session.current.rootMidi, ...session.current.voicingMidis]
+        : [session.current.midi],
       instrument: TRAINING_PIANO.instrument,
       velocity: TRAINING_PIANO.velocity,
       ...(selectedMode === "double" ? {
         trialType: session.current.trialType,
         orderedPair: session.current.orderedPair,
         rangePattern: session.current.rangePattern
+      } : {}),
+      ...(isVoicingMode() ? {
+        topNote: displayNote(session.current.pitchClass),
+        topMidi: session.current.midi,
+        chordName: session.current.chordName,
+        root: displayNote(session.current.root),
+        rootMidi: session.current.rootMidi,
+        voicingMidis: session.current.voicingMidis
       } : {})
     },
     answer: normalizedAnswer === null ? null : (Array.isArray(normalizedAnswer) ? normalizedAnswer : [normalizedAnswer]),
@@ -1236,7 +1344,7 @@ function buildExportPayload({ partial = false } = {}) {
     app: "Chroma 56",
     exportedAt: new Date().toISOString(),
     session: {
-      version: selectedMode === "double" ? "two-note" : "single-note",
+      version: selectedMode === "double" ? "two-note" : isVoicingMode() ? "voicing" : "single-note",
       startedAt: session.sessionStartedAt,
       completedAt: partial ? null : new Date().toISOString(),
       partial,
@@ -1256,10 +1364,20 @@ function buildExportPayload({ partial = false } = {}) {
       oobPitches: selectedMode === "double"
         ? [...new Set(sameIntervalHardOobPairsFor(selectedDay).flat())].map(displayNote)
         : session.oob.map(displayNote),
-      tonesPerQuestion: selectedMode === "double" ? 2 : 1,
+      tonesPerQuestion: selectedMode === "double" ? 2 : isVoicingMode() ? 5 : 1,
       oobRule: selectedMode === "double"
         ? "未解禁ペアのうち既習音をちょうど1音含み、実際のトップノートが既習音になるHard OOBを出題。OOB枠内は現在ペア由来70%、過去ペア由来30%"
         : "新規音の±1/±2未習音を優先し、不足時は既習集合の境界から補充",
+      ...(isVoicingMode() ? {
+        answerRule: "低音域のルートとクローズド4声ヴォイシングを同時に鳴らし、回答は4声のトップノートのみ",
+        voicingTopMinimumMidi: 60,
+        voicingBassOctave: VOICING_BASS_OCTAVE,
+        voicingPatterns: VOICING_PATTERNS.map((pattern) => ({
+          chordNameForBTop: chordName(pattern.root, pattern.symbol),
+          rootForBTop: NOTE_NAMES[pattern.root],
+          voicesForBTop: pattern.voices.map((note) => NOTE_NAMES[note])
+        }))
+      } : {}),
       ...(selectedMode === "double" ? {
         pairStage: selectedDay.stage,
         dayInPairStage: selectedDay.dayInStage,
@@ -1371,13 +1489,21 @@ function showDays() {
 function selectMode(mode) {
   selectedMode = mode;
   selectedWeek = 1;
-  selectedDay = (mode === "double" ? DOUBLE_DAYS : DAYS)[0];
-  $("#versionEyebrow").textContent = mode === "double" ? "264 DAYS · 66-PAIR / TWO-NOTE TRAINING" : "67 DAYS · SINGLE-NOTE TRAINING";
+  selectedDay = daysForMode(mode)[0];
+  $("#versionEyebrow").textContent = mode === "double"
+    ? "264 DAYS · 66-PAIR / TWO-NOTE TRAINING"
+    : mode === "voicing"
+    ? "67 DAYS · 4-VOICE TOP-NOTE TRAINING"
+    : "67 DAYS · SINGLE-NOTE TRAINING";
   $("#versionCopy").textContent = mode === "double"
     ? "12音から作る66個の無順序ペアを、1ペア4日ずつ積み上げる264日間です。"
+    : mode === "voicing"
+    ? "単音版と同じ進行で、問題音だけ低音ルート付きのクローズド4声ヴォイシングに置き換えます。回答するのはトップノートです。"
     : "成人の絶対音感学習研究をもとに、集中Dayを挟みながらFから全12音へ段階的に広げる67日間。";
   $("#trainingAbout").textContent = mode === "double"
-    ? "E–Fから始め、毎ステージ1ペアだけ解禁します。固定・比較は150問、汎化は200問、確認は250問。5セクションに分けて新規・直近・累積を配分します。"
+    ? "E-Fから始め、毎ステージ1ペアだけ解禁します。固定・比較は150問、汎化は200問、確認は250問。5セクションに分けて新規・直近・累積を配分します。"
+    : mode === "voicing"
+    ? "各トップノートに対して12種類のコード候補をランダムに割り当てます。4声はトップをC4以上に置いたクローズド配置、ルートはC2-B2の低音域で同時に鳴らします。"
     : "追加音はまず「集中」で新規音とOOBだけを聞き、その後「記憶・境界・速度・定着」の4段階で累積学習します。1日300問（60×5セクション）です。";
   renderWeekTabs();
   renderDays();

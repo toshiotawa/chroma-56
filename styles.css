@@ -59,12 +59,12 @@ h1 { margin: 0; max-width: 900px; font-family: Georgia, "Yu Mincho", serif; font
 h1 em { color: var(--coral); font-weight: 400; }
 .hero-copy { max-width: 620px; margin: 28px 0 0; color: var(--muted); line-height: 1.9; }
 
-.mode-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 64px; }
+.mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 64px; }
 .mode-card { min-height: 270px; padding: 28px; border: 1px solid var(--line); background: rgba(255,253,248,.5); text-align: left; cursor: pointer; transition: transform .2s, border-color .2s, background .2s; }
 .mode-card:hover, .mode-card:focus-visible { transform: translateY(-5px); border-color: var(--ink); outline: 0; }
 .mode-card.featured { background: var(--acid); border-color: var(--acid); }
 .mode-card .day-number { display: block; color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .14em; }
-.mode-card strong { display: block; margin-top: 70px; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 400; }
+.mode-card strong { display: block; margin-top: 70px; font-family: Georgia, serif; font-size: clamp(1.8rem, 3.4vw, 3.1rem); font-weight: 400; }
 .mode-card small { display: block; max-width: 390px; margin-top: 14px; color: var(--muted); line-height: 1.7; }
 
 .week-tabs { display: flex; gap: 28px; margin-top: 70px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
