@@ -1,6 +1,9 @@
 "use strict";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const VOICING_TOP_NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+const NATURAL_PITCH_CLASSES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const TWO_NOTE_NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const DUAL_NOTE_NAMES = { 1: "C#/Db", 3: "D#/Eb", 6: "F#/Gb", 8: "G#/Ab", 10: "A#/Bb" };
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
@@ -28,18 +31,18 @@ const SMPLR_MODULE_URL = "https://unpkg.com/smplr@0.20.0/dist/index.mjs";
 const TRAINING_MIDI_NOTES = Array.from({ length: 60 }, (_, index) => 36 + index);
 
 const VOICING_PATTERNS = [
-  { symbol: "M7", root: 0, voices: [0, 4, 7, 11] },
-  { symbol: "m7", root: 1, voices: [1, 4, 8, 11] },
-  { symbol: "m9", root: 9, voices: [0, 4, 7, 11] },
-  { symbol: "M9", root: 9, voices: [1, 4, 8, 11] },
-  { symbol: "13", root: 2, voices: [0, 4, 6, 11] },
-  { symbol: "7alt", root: 8, voices: [0, 4, 6, 11] },
-  { symbol: "M9", root: 4, voices: [3, 6, 8, 11] },
-  { symbol: "m9", root: 4, voices: [2, 6, 7, 11] },
-  { symbol: "M7", root: 7, voices: [2, 6, 7, 11] },
-  { symbol: "m7", root: 8, voices: [3, 6, 8, 11] },
-  { symbol: "6", root: 11, voices: [3, 6, 8, 11] },
-  { symbol: "m6", root: 11, voices: [2, 6, 8, 11] }
+  { symbol: "M7", root: 0, rootToTopSteps: 6, voices: [0, 4, 7, 11] },
+  { symbol: "m7", root: 1, rootToTopSteps: 6, voices: [1, 4, 8, 11] },
+  { symbol: "m9", root: 9, rootToTopSteps: 1, voices: [0, 4, 7, 11] },
+  { symbol: "M9", root: 9, rootToTopSteps: 1, voices: [1, 4, 8, 11] },
+  { symbol: "13", root: 2, rootToTopSteps: 5, voices: [0, 4, 6, 11] },
+  { symbol: "7alt", root: 8, rootToTopSteps: 2, voices: [0, 4, 6, 11] },
+  { symbol: "M9", root: 4, rootToTopSteps: 4, voices: [3, 6, 8, 11] },
+  { symbol: "m9", root: 4, rootToTopSteps: 4, voices: [2, 6, 7, 11] },
+  { symbol: "M7", root: 7, rootToTopSteps: 2, voices: [2, 6, 7, 11] },
+  { symbol: "m7", root: 8, rootToTopSteps: 2, voices: [3, 6, 8, 11] },
+  { symbol: "6", root: 11, rootToTopSteps: 0, voices: [3, 6, 8, 11] },
+  { symbol: "m6", root: 11, rootToTopSteps: 0, voices: [2, 6, 8, 11] }
 ];
 
 const SINGLE_NOTE_DAY_PROFILES = [
@@ -589,8 +592,49 @@ function transposePitchClass(pitchClass, semitones) {
   return (pitchClass + semitones + 12) % 12;
 }
 
-function chordName(root, symbol) {
-  return `${NOTE_NAMES[root]}${symbol}`;
+function letterIndexFor(noteName) {
+  return NOTE_LETTERS.indexOf(noteName[0]);
+}
+
+function accidentalForPitchClassWithLetter(pitchClass, letter) {
+  let accidental = pitchClass - NATURAL_PITCH_CLASSES[letter];
+  while (accidental > 6) accidental -= 12;
+  while (accidental < -6) accidental += 12;
+  return accidental;
+}
+
+function spellingForPitchClassWithLetter(pitchClass, letter) {
+  const accidental = accidentalForPitchClassWithLetter(pitchClass, letter);
+  if (accidental > 0) return `${letter}${"#".repeat(accidental)}`;
+  if (accidental < 0) return `${letter}${"b".repeat(Math.abs(accidental))}`;
+  return letter;
+}
+
+function singleAccidentalSpellingsForPitchClass(pitchClass) {
+  return NOTE_LETTERS.flatMap((letter) => {
+    const accidental = accidentalForPitchClassWithLetter(pitchClass, letter);
+    return Math.abs(accidental) <= 1 ? [{ letter, accidental }] : [];
+  });
+}
+
+function chordRootName(root, topPitchClass, pattern) {
+  const candidates = singleAccidentalSpellingsForPitchClass(topPitchClass).map((top) => {
+    const topLetterIndex = NOTE_LETTERS.indexOf(top.letter);
+    const rootLetter = NOTE_LETTERS[(topLetterIndex - pattern.rootToTopSteps + NOTE_LETTERS.length * 2) % NOTE_LETTERS.length];
+    const rootAccidental = accidentalForPitchClassWithLetter(root, rootLetter);
+    return {
+      rootLetter,
+      rootAccidental,
+      score: Math.abs(rootAccidental) * 10 + (Math.abs(rootAccidental) > 1 ? 100 : 0) + (rootAccidental > 0 ? 1 : 0)
+    };
+  });
+  candidates.sort((first, second) => first.score - second.score);
+  const chosen = candidates[0];
+  return spellingForPitchClassWithLetter(root, chosen.rootLetter);
+}
+
+function chordName(root, topPitchClass, pattern) {
+  return `${chordRootName(root, topPitchClass, pattern)}${pattern.symbol}`;
 }
 
 function midiFor(pitchClass, octave) {
@@ -618,9 +662,11 @@ function buildVoicing(pitchClass, topOctave, pattern) {
     midi: topMidi,
     root,
     rootMidi: midiFor(root, VOICING_BASS_OCTAVE),
+    rootName: chordRootName(root, pitchClass, pattern),
     voicingPitchClasses: [...innerMidis.map((midi) => midi % 12), pitchClass],
     voicingMidis: [...innerMidis, topMidi],
-    chordName: chordName(root, pattern.symbol)
+    chordType: pattern.symbol,
+    chordName: chordName(root, pitchClass, pattern)
   };
 }
 
@@ -1227,7 +1273,8 @@ function answerTrial(answer) {
         topNote: displayNote(session.current.pitchClass),
         topMidi: session.current.midi,
         chordName: session.current.chordName,
-        root: displayNote(session.current.root),
+        chordType: session.current.chordType,
+        root: session.current.rootName,
         rootMidi: session.current.rootMidi,
         voicingMidis: session.current.voicingMidis
       } : {})
@@ -1245,7 +1292,7 @@ function answerTrial(answer) {
     const expectedText = selectedMode === "double" && session.current.isOob
       ? `OOB（${session.current.pitchClasses.map(displayNote).join(" + ")}）`
       : Array.isArray(session.current.expected) ? session.current.expected.join(" + ") : session.current.expected;
-    const voicingChordText = isVoicingMode() ? ` · ${session.current.chordName}` : "";
+    const voicingChordText = isVoicingMode() ? ` · ${session.current.chordType}` : "";
     const expectedAnswers = Array.isArray(session.current.expected) ? session.current.expected : [session.current.expected];
     const chosenAnswers = answer === null ? [] : (Array.isArray(answer) ? answer : [answer]);
     expectedAnswers.forEach((expected) => {
@@ -1374,8 +1421,8 @@ function buildExportPayload({ partial = false } = {}) {
         voicingTopMinimumMidi: 60,
         voicingBassOctave: VOICING_BASS_OCTAVE,
         voicingPatterns: VOICING_PATTERNS.map((pattern) => ({
-          chordNameForBTop: chordName(pattern.root, pattern.symbol),
-          rootForBTop: NOTE_NAMES[pattern.root],
+          chordNameForBTop: chordName(pattern.root, VOICING_REFERENCE_TOP, pattern),
+          rootForBTop: chordRootName(pattern.root, VOICING_REFERENCE_TOP, pattern),
           voicesForBTop: pattern.voices.map((note) => NOTE_NAMES[note])
         }))
       } : {}),

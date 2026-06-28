@@ -15,13 +15,21 @@ const active = activeNotesFor(DAYS.at(-1));
 const deck = buildSingleNoteSectionDeck(DAYS.at(-1), DAYS.at(-1).sectionMixes[0], active, []);
 const bTopVoicings = VOICING_PATTERNS.map((pattern) => buildVoicing(11, 4, pattern));
 const bTopNames = bTopVoicings.map((voicing) => voicing.chordName);
+const bTopTypes = bTopVoicings.map((voicing) => voicing.chordType);
+const fTopNames = VOICING_PATTERNS.map((pattern) => buildVoicing(5, 4, pattern).chordName);
+const abTopNames = VOICING_PATTERNS.map((pattern) => buildVoicing(8, 4, pattern).chordName);
 
 if (!bTopNames.includes("CM7")) failures.push("B top is missing CM7");
-if (!bTopNames.includes("C#m7")) failures.push("B top is missing C#m7");
 if (!bTopNames.includes("Am9")) failures.push("B top is missing Am9");
 if (!bTopNames.includes("D13")) failures.push("B top is missing D13");
-if (!bTopNames.includes("G#7alt")) failures.push("B top is missing G#7alt");
 if (!bTopNames.includes("Bm6")) failures.push("B top is missing Bm6");
+for (const expectedType of ["M7", "m7", "m9", "M9", "13", "7alt", "6", "m6"]) {
+  if (!bTopTypes.includes(expectedType)) failures.push(\`B top is missing chord type \${expectedType}\`);
+}
+if (!fTopNames.includes("Ab13")) failures.push("F top should spell the 13 chord as Ab13");
+if (fTopNames.includes("G#13")) failures.push("F top should not spell the 13 chord as G#13");
+if (!abTopNames.includes("Bbm7")) failures.push("Ab top should spell the m7 chord as Bbm7");
+if (abTopNames.includes("A#m7")) failures.push("Ab top should not spell the m7 chord as A#m7");
 
 for (const trial of deck) {
   if (!trial.voicingMidis || trial.voicingMidis.length !== 4) failures.push("Trial does not have a 4-voice voicing");
